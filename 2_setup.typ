@@ -1,6 +1,6 @@
-#import "utils.typ": terminal
+#import "utils.typ": *
 
-= セットアップ
+= セットアップ <sec-setup>
 本章では`hokuyo_navigation2`含めて全てのセットアップの方法について説明します。
 
 == ROS 2のインストール
@@ -89,14 +89,15 @@ sudo apt-get install -y tree xdotool wmctrl zenity bc
 
 URDF依存パッケージをインストールします。
 #terminal[```bash
-sudo apt-get install ros-tf-transformations ros-humble-joint-state-publisher \
-ros-humble-robot-state-publisher
+sudo apt-get install ros-humble-tf-transformations \
+ros-humble-joint-state-publisher ros-humble-robot-state-publisher
 ```]
 
-ROS2パッケージを取得します。
+ROS2パッケージを取得します。`hokuyo_navigation2` は複数のリポジトリをまとめた構成のため、
+#tsuyo[`--recursive` を必ず付けて]クローンしてください。
 #terminal[```bash
 cd ~/colcon_ws/src
-git clone https://github.com/hokuyo_rsf.git
+git clone https://github.com/Hokuyo-aut/hokuyo_rsf.git
 git clone --recursive https://github.com/Hokuyo-aut/hokuyo_navigation2.git
 cd ~/colcon_ws
 rosdep update
@@ -104,10 +105,29 @@ rosdep install -i --from-path src/hokuyo_navigation2 --ignore-src -r -y
 colcon build --symlink-install
 ```]
 
+#warn[
+  `--recursive` を付け忘れると、子リポジトリのフォルダが空のままになり、
+  後のビルドが失敗します。付け忘れた場合の復旧方法は @err-submodule を参照してください。
+]
+
+クローン後、各フォルダに中身が入っているか確認します。
+すべてに複数のファイルが表示されれば正常です。
+#terminal[```bash
+cd ~/colcon_ws/src/hokuyo_navigation2
+ls hokuyo_navigation2 hokuyo_navigation2_gui vizanti hokuyo_slam_ros2 \
+waypoint_manager lio_nav2_bringup simple_fastlio_localization_ros2
+```]
+
 pythonパッケージをインストールします。
 #terminal[```bash
 cd ~/colcon_ws/src/hokuyo_navigation2
-pip install -r requirements.txt
+pip3 install -r requirements.txt
+```]
+
+スクリプトに実行権限を付与します。#tsuyo[この手順を飛ばすと GUI からの操作が動きません。]
+#terminal[```bash
+cd ~/colcon_ws/src/hokuyo_navigation2/hokuyo_navigation2
+chmod +x scripts/*.sh scripts/*/*.sh src/*.py
 ```]
 
 サンプルを動作させるためのモータドライバをインストールします。
@@ -141,7 +161,8 @@ cd proj-9.4.1
 mkdir build
 cd build
 cmake ..
-cmake --build . --target install
+cmake --build .
+sudo cmake --build . --target install
 # pcl 1.14.1 ビルドに時間がかかります。
 cd ~/hokuyo_lib
 wget https://github.com/PointCloudLibrary/pcl/releases/download/pcl-1.14.1/source.tar.gz -O pcl.tar.gz
@@ -163,6 +184,44 @@ cd ~/colcon_ws
 colcon build
 colcon build --symlink-install --packages-select hokuyo_navigation2 lio_nav2_bringup simple_fastlio_localization
 ```]
+
+#warn[
+  `pcl` のビルドは、パソコンの性能によっては#tsuyo[30分以上かかります]。
+  途中で中断せず、完了するまでお待ちください。
+  ビルドが失敗する場合は @err-build-pcl を参照してください。
+]
+
+#danger[
+  `hokuyo_slam_ros2` は #tsuyo[`colcon build` では作られません]。
+  上記のように `cmake` で個別にビルドする必要があります。
+  この手順を飛ばすと、マッピング実行時に
+  「エラー: 'run_p2o' 実行ファイルが見つかりませんでした。」と表示されます（@err-no-runp2o）。
+]
+
+=== セットアップの確認 <subsec-setup-verify>
+
+インストールが正しく完了したか、次の3点で確認してください。
+
+#fstep(1, [3D SLAM の実行ファイルができているか], [
+  #terminal[```bash
+find ~/colcon_ws -name run_p2o -type f
+```]
+  パスが1行以上表示されれば成功です。何も表示されない場合は @err-no-runp2o を参照してください。
+])
+#fstep(2, [必要なフォルダができているか], [
+  #terminal[```bash
+ls ~/colcon_ws/src/hokuyo_navigation2/hokuyo_navigation2/
+```]
+  `map`、`waypoints`、`rosbag`、`config`、`scripts` が表示されれば成功です。
+])
+#fstep(3, [ROS 2 パッケージが認識されているか], [
+  #terminal[```bash
+source ~/colcon_ws/install/setup.bash
+ros2 pkg list | grep -e hokuyo -e waypoint -e vizanti -e lio_nav2
+```]
+  `hokuyo_navigation2`、`waypoint_manager`、`vizanti_server`、`lio_nav2_bringup` などが
+  表示されれば成功です。表示されない場合は @err-build-fail を参照してください。
+])
 
 GUIを使用するためには、後述の「GUIサーバの起動」を行う前に、ファイアーウォールの設定でポート5050を開放する必要があります。
 ファイアーウォールの設定の詳細は @sec-gui @tab-used-ports を参照してください。
@@ -261,7 +320,7 @@ cd
 モータドライバはROS 2トピックで制御されることを前提としており、サンプルでは #link("https://github.com/hokuyo-rd-release/hokuyo_navigation2/blob/release/scripts/navigation/nav_common.sh")[こちらのシェルスクリプト `nav_common.sh`]
 を通じてROS 2 モータドライバの起動コマンドを実行しております。`launch_motor_driver`関数で呼び出すモータのコマンドを変更して、`hokuyo_navigation2` パッケージを再度ビルドしてください。
 
-#text(size: 7pt)[
+#terminal[#text(size: 7pt)[
 ```bash
 # モータドライバを起動する関数
 launch_motor_driver() {
@@ -273,6 +332,6 @@ launch_motor_driver() {
     fi
 }
 ```
-]
+]]
 
 #pagebreak()

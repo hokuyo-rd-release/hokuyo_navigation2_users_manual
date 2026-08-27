@@ -1,3 +1,5 @@
+#import "utils.typ": *
+
 = コンフィグファイルの設定 <sec-config>
 
 コンフィグファイルは、地図作成等の動作に必要なパラメータを定義するためのファイルです。
@@ -8,35 +10,58 @@
  
 == 地図作成パラメータ用のコンフィグファイル
 / 地図作成コンフィグ: 地図作成・経路設計の動作に必要なパラメータを定義するためのファイルです。CSV形式で、各行にパラメータ名と値を定義します。#footnote[CSVファイル内に半角スペース（カンマの前後など）が含まれないように注意してください。正常に読み込まれない原因となります。]
-  `... ../hokuyo_navigation2/hokuyo_navigation2/scripts/mapping` に保存されているシェルスクリプトが地図作成の実行時にこのコンフィグファイルを読み込んで#footnote[地図作成コンフィグファイルは、地図作成の実行時に読み込まれます。地図作成の実行前に、適切な値に設定して保存してください。地図作成の実行中にコンフィグファイルを編集しても、地図作成の動作には反映されません。]、
-  地図作成の動作に必要なパラメータ名は `option_name` であり、`value`の列を編集して設定します。`option_name` について下記で解説します。`default`#footnote[default の値は、あくまで参考値であり、実際の環境や使用するセンサに応じて適切な値に設定してください。例えば、`gnss_cov_thre`は、GNSSの受信状況や精度に応じて調整が必要です。]は、パラメータの参考値として記載しています。
+  #path[~/colcon_ws/src/hokuyo_navigation2/hokuyo_navigation2/scripts/mapping/] に保存されているシェルスクリプトが地図作成の実行時にこのコンフィグファイルを読み込んで#footnote[地図作成コンフィグファイルは、地図作成の実行時に読み込まれます。地図作成の実行前に、適切な値に設定して保存してください。地図作成の実行中にコンフィグファイルを編集しても、地図作成の動作には反映されません。]、
+  1列目がパラメータ名、#tsuyo[2列目が実際に使われる値]、3列目は参考値です。設定を変えるときは #tsuyo[2列目だけ]を書き換えてください。#footnote[3列目の値は、あくまで参考値であり、実際の環境や使用するセンサに応じて適切な値に設定してください。例えば、`gnss_cov_thre`は、GNSSの受信状況や精度に応じて調整が必要です。]
 
-#text(size: 8pt)[
+出荷時のコンフィグファイル `config/hokuyo_slam_topics_cfg.csv` の内容を以下に示します。
+
+#terminal[#text(size: 8pt)[
 ```csv
-option_name,value,default
+オプション,指定値,デフォルト値
 gnss_topic,/fix,/fix
 pointcloud_topic,/hokuyo3d/hokuyo_cloud2,/hokuyo3d3/hokuyo_cloud2
-lio_topic,/hokuyo_lio/lidar_odom,/hokuyo_lio/sync_odom
+lio_topic,/rsf/lio_lidar_rate_odom,/hokuyo_lio/sync_odom
 run_lio,true,true
 gnss_cov_thre,0.01,0.01
 imu_topic,/hokuyo3d/imu
 slam_mode,gnss
-pc_save_distance,1.0
-wp_save_distance,2.0
+pc_save_distance,0.3
+wp_save_distance,0.5
 gnss_min_movement_thre,4.0
 lio_min_movement_thre,0.1
 gravity_stride,1
 orig_frame,yvt,yvt
 target_frame,lio_odom,lio_odom
-thre_z_min,-1.0,-1.0
-thre_z_max,20.0,20.0
+thre_z_min,-0.2,-1.0
+thre_z_max,2.0,20.0
 map_resolution,0.05,0.05
 thres_point_count,1,1
-flag_pass_through,False,False
+flag_pass_through,True,True
 thre_radius,0.1,0.1
-waypoint_tolerance,1.0,1.0
-fix_rate,40,40
+waypoint_tolerance,0.1,1.0
+fix_rate,30,40
 ```
+]]
+
+#danger[
+  このファイルを編集するときは、#tsuyo[行の順序を絶対に変えないでください。]\
+  スクリプトはパラメータ名ではなく#tsuyo[上から何行目か]で値を読み取ります。
+  行を入れ替えたり、使わない行を削除したりすると、
+  以降の項目がすべて1つずつずれ、まったく別の設定として解釈されます。
+  詳細と復旧方法は @err-csv-order を参照してください。
+]
+
+#note[
+  1行目の見出し（`オプション,指定値,デフォルト値`）は読み飛ばされるため、
+  文言そのものに意味はありません。ただし#tsuyo[削除はしないでください]。
+  削除すると全体が1行ずれます。
+]
+
+#tip[
+  各パラメータの意味・既定値・どの処理で使われるかを1つの表にまとめたものを
+  @tab-ref-mapping-params に用意しています。
+  「どの値をどちら向きに変えればよいか」で迷ったときは
+  @tab-ref-param-symptom が便利です。
 ]
 
 #text(size: 9pt)[
@@ -67,18 +92,18 @@ fix_rate,40,40
 == 走行順序の定義
 / シナリオファイル: 複数の地図を切り替えて走行する際の地図走行順序を定義するためのファイルです。CSV形式で、各行に地図のファイル名と走行順序を定義します。#footnote[CSVファイル内に半角スペース（カンマの前後など）が含まれないように注意してください。正常に読み込まれない原因となります。]
 
-#text(size: 8pt)[
+#terminal[#text(size: 8pt)[
 ```csv
 map_file,waypoint_file,nav_type,interval
 map1,waypoint1,loc,10
 map2,waypoint2,gnss,30
 map3,waypoint3,loc,5
 ```
-]
+]]
 
 #text(size: 9pt)[
 / `map_file`: 使用する地図ファイルの名前を定義します。地図ファイルは、3D点群地図(pcd形式)と2D地図(pgm形式)を使用します。この際、3D地図と2D地図のファイル名は同じにしてください。例えば、3D地図が`map1.pcd`の場合、対応する2D地図は`map1.pgm`になります。\
-/ `waypoint_file`: 使用する経路ファイルの名前を定義します。経路ファイルは、json形式のwaypointファイルを使用します。waypointファイルの詳細な形式や作成方法については「第 @sec-waypoint 章」を参照してください。\
+/ `waypoint_file`: 使用する経路ファイルの名前を定義します。経路ファイルは、json形式のwaypointファイルを使用します。waypointファイルの詳細な形式や作成方法については @sec-waypoint を参照してください。\
 / `nav_type`: 走行モードを定義します。走行モードは、loc(3D地図とのマッチング), gnss(リアルタイム) の2種類があります。\
 / `interval`: 地図の切り替え間隔 [s] を定義します。multi_map走行モードで複数の地図を切り替える際に使用します。例えば、10秒ごとに地図を切り替える場合は、intervalを10に設定します。
 ]
@@ -103,5 +128,53 @@ map3,waypoint3,loc,5
   ),
   caption: [コンフィグファイルの編集画面],
 ) <im7>
+
+== 編集後の確認 <subsec-config-verify>
+
+コンフィグファイルを編集したら、#tsuyo[意図した値が読み込まれているか]を必ず確認してください。
+マッピングを実行すると、端末の先頭に読み込まれた設定値の一覧が表示されます。
+
+#console(title: "マッピング開始時に表示される設定値")[```
+Loading config from: /home/hokuyo/colcon_ws/src/.../config/hokuyo_slam_topics_cfg.csv
+gnss_topic: /fix
+pointcloud_topic: /hokuyo3d/hokuyo_cloud2
+lio_topic: /rsf/lio_lidar_rate_odom
+gnss_cov_thre: 0.01
+imu_topic: /hokuyo3d/imu
+slam_mode: gnss
+pc_save_distance: 0.3
+wp_save_distance: 0.5
+```]
+
+#warn[
+  `WARNING: Config file not found at ... Using default values.` と表示された場合は、
+  #tsuyo[指定した設定ファイルが読めておらず、既定値で動いています]。
+  マッピング実行時のファイル選択を確認してください。
+]
+
+#capture-todo(
+  "C-14",
+  [マッピング開始時に端末へ表示される設定値の一覧（実機）],
+  height: 36mm,
+)
+#v(3pt)
+#text(size: 8.5pt)[
+  ※ 撮影待ちです。撮影依頼の詳細は @tab-capture-p3 を参照してください。
+]
+
+== うまくいかないときは <subsec-config-trouble>
+
+#figure(
+  stable(
+    columns: (1fr, auto),
+    [*症状*], [*参照先*],
+    [設定を変えたのに反映されない], [@err-csv-order],
+    [変えていない項目まで挙動が変わった], [@err-csv-order],
+    [シナリオファイルが `CSVファイル` の一覧に出てこない], [@err-nav-no-csv],
+    [ファイル名を変更しようとすると拒否される], [@err-rename],
+    [ファイル選択画面でフォルダを開けない], [@err-path-denied],
+  ),
+  caption: [コンフィグファイルでよくある症状],
+) <tab-config-trouble>
 
 #pagebreak()

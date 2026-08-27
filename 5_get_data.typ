@@ -1,6 +1,8 @@
+#import "utils.typ": *
+
 = データの取得 <sec-get-data>
 
-@sub3 のメイン画面の「データ取得」ボタンをクリックすることで、ROS ノード、モータドライバの起動・停止を行い、Vizanti 画面で地図・経路作成に必要な rosbag を取得します。この手順を実施する前に、RSFのノードのパラメータ(IPアドレスや、rostopic名、tfフレーム名等)を `... ../hokuyo_navigation2/hokuyo_navigation2/config/rsf_node_config.yaml` で確認して下さい。
+@sub3 のメイン画面の「データ取得」ボタンをクリックすることで、ROS ノード、モータドライバの起動・停止を行い、Vizanti 画面で地図・経路作成に必要な rosbag を取得します。この手順を実施する前に、RSFのノードのパラメータ(IPアドレスや、rostopic名、tfフレーム名等)を #path[~/colcon_ws/src/hokuyo_navigation2/hokuyo_navigation2/config/rsf_node_config.yaml] で確認して下さい。主な項目は @tab-ref-rsf にまとめています。
 
 == 動作の説明
 「データ取得」ボタンをクリックすると、画面が遷移し、「センサデータの記録が開始されました」と表示されます。すると、@im8 に示すターミナルと「ロボットプログラム停止用ポップアップ」#footnote[万が一ROSノードやモータドライバが起動した状態のままウェブGUIが無効化された場合は、@sub15 のポップアップを使用することで、ROSノードとモータドライバを停止させてください。]が起動し、RSFのROSノードとモータドライバが起動します。ターミナルはすぐに最小化されます。
@@ -42,7 +44,7 @@ GUIはメイン画面に戻り、「現在のモード」が「手動操作モ�
     ),
     caption: [手動操作モードで扱うボタンの位置 1],
   ) <im10>
-+ @sub19 のrosbag 取得ボタンをクリックして、rosbag の保存名を「Save to path：」に ` /path/to/hokuyo_navigation2/hokuyo_navigation2/rosbag/<ROSBAG_NAME> ` を入力し、(` <ROSBAG_NAME> ` はROS2のためディレクトリ名)「Topics：」に @tab-bag-topics の rostopic を選択し、@sub20 の「start recording」 ボタンを押して下さい。rosbag 取得ボタンが表示されていない場合は「＋」ボタンをクリックし、@sub22 の画面を表示し、「Bag Recorder」を表示させて下さい。record ボタンを押すと、recording が開始され、@sub22 のようにアイコンの表示が赤に変わります。
++ @sub19 のrosbag 取得ボタンをクリックして、rosbag の保存名を「Save to path：」に #path[/home/\<ユーザ名\>/colcon_ws/src/hokuyo_navigation2/hokuyo_navigation2/rosbag/\<ROSBAG_NAME\>] を入力し#footnote[「Save to path：」には、`~` を使わず先頭が `/` で始まる絶対パスを入力してください。`<ユーザ名>` の部分は、端末で `whoami` を実行すると確認できます。]、(` <ROSBAG_NAME> ` はROS2のためディレクトリ名)「Topics：」に @tab-bag-topics の rostopic を選択し、@sub20 の「start recording」 ボタンを押して下さい。rosbag 取得ボタンが表示されていない場合は「＋」ボタンをクリックし、@sub22 の画面を表示し、「Bag Recorder」を表示させて下さい。record ボタンを押すと、recording が開始され、@sub22 のようにアイコンの表示が赤に変わります。
   #figure(
     grid(
       columns: (1fr, 1fr),
@@ -89,5 +91,48 @@ GUIはメイン画面に戻り、「現在のモード」が「手動操作モ�
 + データ取得が完了したら @sub21 の Vizanti の rosbag取得アイコンをクリックして stop recording をクリックして rosbag の取得を終了して下さい。
 + Vizanti のブラウザタブを閉じて下さい。
 + @sub3 「ロボット停止」を押して、RSFのROSノードとモータドライバを停止させて下さい。「データ取得」で起動したターミナルが自動で全て閉じられ、GUIサーバのターミナルに、ノードがキルされた文言が表示されます。その後、GUIは @sub3 の現在のモードが「停止モード」となります。
+
+== 良いデータを取るためのこつ <subsec-getdata-tips>
+
+ここで記録したデータの品質が、あとの工程すべてに影響します。
+やり直すには現場での再走行が必要になるため、次の点に注意してください。
+
+#tip[
+  - #tsuyo[記録を始める前にトピックが流れているか確認する。]
+    センサが繋がっていないまま走ると、空の rosbag ができるだけです（@err-no-sensor）。
+  - #tsuyo[ゆっくり走る。] 速く走ると点群が粗くなり、地図の精度が落ちます。
+  - #tsuyo[急旋回を避ける。] その場での高速な回転は LIO の誤差の原因になります。
+  - #tsuyo[出発点に戻ってくる。] 経路が輪になるように走ると、
+    地図作成時に前後のつじつまを合わせやすくなり、ゆがみが減ります。
+  - #tsuyo[GNSS を使う場合は、空の開けた場所から走り始める。]
+    最初に精度の良い位置が得られると、地図全体の精度が上がります。
+  - #tsuyo[走行距離が短すぎないようにする。] 数メートルでは地図になりません（E-304）。
+]
+
+記録を始める前に、次のコマンドで主要なトピックが流れていることを確認してください。
+数値が表示され続ければ正常です。
+
+#terminal[```bash
+ros2 topic hz /hokuyo3d/hokuyo_cloud2
+ros2 topic hz /rsf/lio_lidar_rate_odom
+ros2 topic hz /fix
+```]
+
+== うまくいかないときは <subsec-getdata-trouble>
+
+#figure(
+  stable(
+    columns: (1fr, auto),
+    [*症状*], [*参照先*],
+    [ジョイスティックを操作してもロボットが動かない], [@err-motor-jog],
+    [モータドライバの端末がすぐ閉じる], [@err-motor-driver],
+    [rosbag が記録されない、ファイルが空になる], [@err-bag-empty],
+    [センサのデータがまったく届かない], [@err-no-sensor],
+    [GNSS の精度が上がらない], [@err-no-gnss],
+    [Vizanti の画面が真っ白で何も出ない], [@err-vizanti],
+    [「ロボット停止」が押せない・GUI が反応しない], [@subsec-nav-stop],
+  ),
+  caption: [データ取得でよくある症状],
+) <tab-getdata-trouble>
 
 #pagebreak()

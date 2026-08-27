@@ -13,7 +13,11 @@
   header: context {
     let page_num = counter(page).at(here()).first()
     if page_num > 2 {
-      let chapter = query(heading.where(level: 1).before(here())).at(-1, default: none)
+      // 章見出しは「このページ以前に始まった章」の最後のものを使う。
+      // before(here()) だと、章が始まるページで前の章名が出てしまうため。
+      let chapter = query(heading.where(level: 1))
+        .filter(h => counter(page).at(h.location()).first() <= page_num)
+        .at(-1, default: none)
       let section = query(heading.where(level: 2).before(here())).at(-1, default: none)
 
       if chapter != none {
@@ -22,11 +26,14 @@
         
         // 章番号が1以上（第1章以降）の場合のみヘッダーを表示
         if chap_idx > 0 {
+          // 本文は "1.1"、付録は "A.1" のように、その見出し自身の
+          // numbering パターンを使って番号を組み立てる (付録で 1, 2... と
+          // 表示されてしまうのを防ぐ)
           let left_header = if section != none {
             let sect_nums = counter(heading).at(section.location())
             // 現在の章に属するセクションのみ表示
             if sect_nums.at(0) == chap_idx {
-              [#numbering("1.1", ..sect_nums.slice(0, 2)) #section.body]
+              [#numbering(section.numbering, ..sect_nums.slice(0, 2)) #section.body]
             }
           }
 
@@ -36,7 +43,7 @@
             grid(
               columns: (1fr, 1fr),
               align(left, left_header),
-              align(right, [#chap_idx #chapter.body])
+              align(right, [#numbering(chapter.numbering, chap_idx) #chapter.body])
             ),
             line(length: 100%, stroke: 0.5pt)
           )
@@ -87,6 +94,16 @@
   block(it, above: 1.5em, below: 1em)
 }
 
+// トラブルシューティングのエラーカードはページをまたげるようにする
+#show figure.where(kind: "errorcard"): set block(breakable: true)
+
+// 長い一覧表もページをまたげるようにする (またげないと大きな余白が生じるため)
+#show figure.where(kind: table): set block(breakable: true)
+
+// 表のセルは両端揃えを解除する。列幅が狭いと日本語の字間が
+// 極端に開いてしまい読みにくくなるため。
+#show table: set par(justify: false, first-line-indent: 0em)
+
 // 図表の設定 (番号のみ表示、章-通し番号形式)
 #set figure(numbering: n => context {
   let chap = counter(heading).at(here()).at(0)
@@ -135,14 +152,9 @@
 #show raw.where(block: false): set text(size: 1em)
 
 // ソースコード (listings) の設定
-#show raw.where(block: true): it => block(
-  fill: luma(245),
-  inset: 10pt,
-  radius: 4pt,
-  width: 100%,
-  stroke: 0.5pt + luma(200),
-  it
-)
+// 枠の描画は utils.typ の terminal() / console() が行うため、
+// ここでは行間と両端揃えの解除のみを設定する。
+#show raw.where(block: true): set par(first-line-indent: 0em, justify: false)
 
 
 // --- タイトルページ ---
@@ -156,7 +168,7 @@
   
   #v(0.5cm)
   #text(size: 14pt)[3D SLAM and Navigation System Application for RSF-X001] \
-  #text(size: 14pt)[Document Version 0.1.0]
+  #text(size: 14pt)[Software Version 1.0.0 / Document Version 1.0.0]
   
   #v(6cm)
   #datetime.today().display("[year]年[month]月[day]日")
@@ -184,6 +196,7 @@
 // 各章のインクルード (LaTeX の \input に相当)
 // 注: ファイル名は .typ に変更する必要があります
 #include "1_start.typ"
+#include "2_system.typ"
 #include "2_setup.typ"
 #include "3_launch_gui.typ"
 #include "4_config.typ"
@@ -191,11 +204,16 @@
 #include "6_mapping.typ"
 #include "7_waypoint.typ"
 #include "8_2D_map.typ"
-// #include "9_navigation.typ"
-
-#pagebreak()
+#include "9_navigation.typ"
+#include "10_troubleshooting.typ"
 
 // --- 付録 ---
+// 注: 各章のファイル末尾に #pagebreak() があるため、ここでは改ページしない
+//     (二重に改ページすると白紙ページが生じる)
 #set heading(numbering: "A.1.1  ")
 #counter(heading).update(0)
+#include "appendix_packages.typ"
+#include "appendix_reference.typ"
+#include "appendix_glossary.typ"
+#include "appendix_capture.typ"
 #include "appendix.typ"
