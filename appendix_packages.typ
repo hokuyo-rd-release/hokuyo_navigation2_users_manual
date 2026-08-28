@@ -15,7 +15,7 @@
 == リポジトリ一覧 <subsec-pkg-list>
 
 親リポジトリ #tsuyo[`Hokuyo-aut/hokuyo_navigation2`] に、
-@tab-pkg-submodules の 11 個のリポジトリがサブモジュールとして登録されています。
+@tab-pkg-submodules の 12 個のリポジトリがサブモジュールとして登録されています。
 #tsuyo[ブランチが指定されているものは、そのブランチが取得されます。]
 
 #figure(
@@ -25,7 +25,7 @@
     [`hokuyo_navigation2`], [`hokuyo-rd-release/hokuyo_navigation2`], [`jazzy`],
     [`hokuyo_navigation2_gui`], [`hokuyo-rd-release/hokuyo_navigation2_gui`], [既定],
     [`vizanti`], [`hokuyo-rd-release/vizanti`], [`release`],
-    [`rosbridge_suite`], [`hokuyo-rd-release/rosbridge_suite`], [`humble`],
+    [`rosbridge_suite`], [`hokuyo-rd-release/rosbridge_suite`], [`jazzy`],
     [`hokuyo_slam_ros2`], [`hokuyo-rd-release/hokuyo_slam_ros2`], [既定],
     [`simple_fastlio_localization_ros2`], [`hokuyo-rd/simple_fastlio_localization_ros2`], [`release`],
     [`fix2xyz_packages_ros2`], [`hokuyo-rd-release/fix2xyz_packages_ros2`], [既定],
@@ -33,6 +33,8 @@
     [`waypoint_manager`], [`hokuyo-rd-release/waypoint_manager`], [既定],
     [`jsk_visualization`], [`hokuyo-rd-release/jsk_visualization`], [`jazzy`],
     [`nmea_msgs`], [`hokuyo-rd-release/nmea_msgs`], [`ros2`],
+    [`doc/hokuyo_navigation2_`\ `users_manual`],
+    [`hokuyo-rd-release/hokuyo_navigation2_users_manual`], [既定],
   ),
   caption: [サブモジュールとして登録されているリポジトリ],
 ) <tab-pkg-submodules>
@@ -297,15 +299,17 @@ Vizanti には、上記のほかにも多数のウィジェットが用意され
 WebSocket を使って、ブラウザから ROS 2 のトピックを読み書きできるようにする中継役です。
 `vizanti` が内部で使用します。利用者が直接操作することはありません。
 
-/ リポジトリ: `hokuyo-rd-release/rosbridge_suite`（ブランチ `humble`）
+/ リポジトリ: `hokuyo-rd-release/rosbridge_suite`（ブランチ `jazzy`）
 / 使用ポート: 9090（TCP）
 
 #warn[
-  #dist-jazzy このパッケージに含まれる `rosapi` ノードは、
-  ROS 2 Jazzy で#tsuyo[起動直後に停止します]。
-  Vizanti のトピック一覧がすべて空になるため、
-  rosbag の記録もジョイスティックの設定もできません。
-  原因と修正方法は @err-vizanti-rosapi を参照してください。
+  #tsuyo[このパッケージは、使用する ROS ディストリビューションに合った
+  ブランチを使ってください。]
+  #dist-jazzy では `jazzy`、#dist-humble では `humble` です。\
+  合っていないブランチのままビルドすると、`rosapi` ノードが起動直後に停止し、
+  Vizanti のトピック一覧がすべて空になります。
+  こうなると rosbag の記録もジョイスティックの設定もできません。
+  症状と直し方は @err-vizanti-rosapi を参照してください。
 ]
 
 #note[
@@ -401,7 +405,7 @@ ROS 2 の自律走行スタック Nav2 を、本システムの構成で動か�
     [`map` → `lio_odom`], [3 次元での位置姿勢],
     [`map` → `odom`], [上記を平面に投影したもの（Nav2 が使用）],
     [`base_link`], [RSF（LiDAR）の位置と一致させる],
-    [オドメトリ], [LIO を使用する前提。車輪オドメトリを使う場合は TF 構成の修正が必要],
+    [オドメトリ], [#tsuyo[LIO のみ]。車輪オドメトリは使用しません（@subsec-tf）],
   ),
   caption: [`lio_nav2_bringup` の前提となる座標系],
 ) <tab-pkg-nav2-frames>

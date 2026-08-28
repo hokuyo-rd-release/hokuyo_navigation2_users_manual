@@ -197,6 +197,53 @@ ls hokuyo_navigation2 hokuyo_navigation2_gui vizanti hokuyo_slam_ros2 \
    fix2xyz_packages_ros2 jsk_visualization rosbridge_suite nmea_msgs
 ```]
 
+あわせて、#tsuyo[各サブモジュールのブランチが正しいか]も確認しておきます。
+上の `-b jazzy` を付けてクローンしていれば自動的に正しくなりますが、
+以前に取得したフォルダを使い回している場合はずれていることがあります。
+
+#terminal[```bash
+cd ~/colcon_ws/src/hokuyo_navigation2
+git submodule foreach --quiet 'echo "$name"; git branch --show-current'
+```]
+
+#console(title: "確認の表示例（Jazzy 構成）")[```
+fix2xyz_packages_ros2
+main
+hokuyo_navigation2
+jazzy
+hokuyo_navigation2_gui
+release
+hokuyo_slam_ros2
+release
+jsk_visualization
+jazzy
+lio_nav2_bringup
+release
+nmea_msgs
+ros2
+rosbridge_suite
+jazzy
+simple_fastlio_localization_ros2
+release
+vizanti
+release
+waypoint_manager
+release
+```]
+
+#warn[
+  表示されたブランチが @tab-pkg-submodules と違う場合は、次のコマンドで揃えます。
+
+  #terminal[```bash
+cd ~/colcon_ws/src/hokuyo_navigation2
+git submodule update --init --remote
+```]
+
+  #tsuyo[とくに `rosbridge_suite` のブランチがずれていると]、
+  Vizanti のトピック一覧がすべて空になり、
+  rosbag の記録もジョイスティックの操作もできなくなります（@err-vizanti-rosapi）。
+]
+
 === 依存パッケージの解決
 
 #terminal[```bash
@@ -629,9 +676,12 @@ cd ~
 == お使いのモータドライバに合わせる <subsec-setup-userdriver>
 
 本ソフトウェアは、モータドライバが#tsuyo[ROS 2 のトピックで速度指令を受け取る]ことを前提としています。
-サンプルでは #path[scripts/navigation/nav_common.sh] の `launch_motor_driver` 関数から
-`icart_mini_driver` を起動しています。
-別のモータドライバを使う場合は、この関数の中身を書き換えてください。
+この条件さえ満たしていれば、サンプルとは違うモータドライバでも動かせます。
+
+起動の流れは次のとおりです。
+自律走行を始めると #path[scripts/navigation/nav_common.sh] の
+`launch_motor_driver` 関数が呼ばれ、そこから起動ファイル
+#path[launch/icart_mini_drive_launch.xml] が読み込まれます。
 
 #terminal[#text(size: 7.5pt)[
 ```bash
@@ -647,30 +697,239 @@ launch_motor_driver() {
 ```
 ]]
 
+差し替えで確認すべき点は @tab-userdriver の 3 つです。
+具体的な手順は @subsubsec-setup-userdriver-example に示します。
+
 #figure(
   stable(
     columns: (auto, 1fr),
     [*確認する項目*], [*内容*],
     [購読するトピック名],
-    [既定は `wizurg/cmd_vel`（`geometry_msgs/Twist`）です。
-     モータドライバ側の名前が違う場合は、
-     #path[config/wizurg_opts/nav_opt_lio.csv] ではなく
-     起動コマンドの `cmd_vel_topic` を合わせてください],
-    [オドメトリ],
-    [車輪オドメトリを使う場合は、`odom` → `base_link` の TF を
-     モータドライバ側が出す構成に変更する必要があります（@subsec-tf）],
+    [本ソフトウェアは `wizurg/cmd_vel`（`geometry_msgs/Twist`）へ速度指令を出します。
+     ドライバ側の名前が違う場合は合わせてください（@subsubsec-setup-userdriver-cmdvel）],
+    [TF を出さないこと],
+    [#tsuyo[モータドライバから `odom` → `base_link` の TF を配信しないでください。]
+     この TF は自己位置推定が配信しており、二重になると走行が乱れます
+     （@subsubsec-setup-userdriver-tf）],
     [起動確認],
-    [起動に時間がかかるドライバでは、関数内に待ち処理を追加してください],
+    [起動に時間がかかるドライバでは、`launch_motor_driver` 関数内に
+     待ち処理（`sleep` など）を追加してください],
   ),
   caption: [モータドライバ差し替え時の確認項目],
 ) <tab-userdriver>
 
-書き換えたら、パッケージを作り直します。
 
-#terminal[```bash
+=== 簡易実装例 <subsubsec-setup-userdriver-example>
+
+もっとも手間が少ないのは、#tsuyo[サンプルの起動ファイルの「駆動部分だけ」を差し替える]方法です。
+@fig-userdriver-swap のように、ロボットの形状を配信する部分は#tsuyo[そのまま残し]、
+`icart_mini_driver` を起動している行だけをお使いのドライバに置き換えます。
+
+#figure(
+  flow("robot_state_publisher / joint_state_publisher（そのまま残す）",
+       "モータドライバの起動（ここだけ差し替える）"),
+  caption: [起動ファイルの差し替え方],
+) <fig-userdriver-swap>
+
+#note[
+  この方法では、`icart_mini_driver_ros2` を#tsuyo[アンインストールせずに残しておきます]。
+  #path[urdf/arno.xacro] に書かれたロボットの寸法（`base_link` から見た
+  LiDAR・GNSS・カメラの取り付け位置）は `robot_state_publisher` が配信しており、
+  #tsuyo[これが無いとセンサの位置が分からなくなる]ためです。
+  差し替えるのは、実際にモータを回すノードだけです。
+]
+
+==== 手順
+
++ 起動ファイルを開きます。
+
+  #terminal[```bash
+cd ~/colcon_ws/src/hokuyo_navigation2/hokuyo_navigation2/launch
+nano icart_mini_drive_launch.xml
+```]
+
++ ファイルの末尾にある `icart_mini_bringup_launch.py` の `<include>` を
+  #tsuyo[コメントアウト]し、代わりにお使いのモータドライバのノードを書きます。
+  上半分の `joint_state_publisher` と `robot_state_publisher` は#tsuyo[触りません]。
+
+  #terminal[#text(size: 7.5pt)[
+```xml
+  <!-- ここは触らない：ロボットの形状と取り付け位置を配信する -->
+  <node pkg="joint_state_publisher" exec="joint_state_publisher"
+        name="joint_state_publisher" output="screen">
+    <param name="use_gui" value="True"/>
+    <param name="use_sim_time" value="$(var use_sim_time)"/>
+  </node>
+
+  <node pkg="robot_state_publisher" exec="robot_state_publisher"
+        name="robot_state_publisher" output="screen">
+    <param name="robot_description" value="$(var robot_description)"/>
+    <param name="use_sim_time" value="$(var use_sim_time)"/>
+  </node>
+
+  <!-- ▼ サンプルのモータドライバ：コメントアウトする ▼
+  <include file="$(var icart_mini_driver_pkg_path)/launch/icart_mini_bringup_launch.py">
+    <arg name="use_sim_time" value="$(var use_sim_time)"/>
+  </include>
+  ▲ ここまで ▲ -->
+
+  <!-- ▼ お使いのモータドライバをここで起動する ▼ -->
+  <node pkg="<お使いのパッケージ名>" exec="<実行ファイル名>"
+        name="motor_driver" output="screen">
+    <param name="publish_tf" value="false"/>          <!-- TF は出さない -->
+    <remap from="cmd_vel" to="wizurg/cmd_vel"/>       <!-- 速度指令の名前を合わせる -->
+  </node>
+  <!-- ▲ ここまで ▲ -->
+```
+  ]]
+
++ 書き換えたら、パッケージを作り直します。
+
+  #terminal[```bash
 cd ~/colcon_ws
 colcon build --symlink-install --packages-select hokuyo_navigation2
+source install/setup.bash
 ```]
+
+#tip[
+  起動ファイル（`.xml`）だけを変更した場合、`--symlink-install` を付けてビルドしてあれば
+  #tsuyo[次回以降はビルドし直さなくても反映されます]。
+]
+
+=== TF を二重に出さないようにする <subsubsec-setup-userdriver-tf>
+
+#policy[
+  本ソフトウェアは、#tsuyo[車輪オドメトリを使いません。]
+  自律走行のオドメトリは、#tsuyo[RSF の LIO（LiDAR 慣性オドメトリ）だけ]を使います。
+
+  そのため、`odom` → `base_link` の TF は
+  #tsuyo[自己位置推定（`simple_fastlio_localization`）が配信します。]
+  モータドライバは、車輪の回転からオドメトリを計算していたとしても、
+  #tsuyo[その結果を TF として配信してはいけません。]
+
+  #tsuyo[車輪オドメトリも併用したい場合は、本ソフトウェアの対象外です。]
+  TF の管理方法と、車輪オドメトリと LIO を融合する仕組みは、
+  #tsuyo[お客様側でご用意ください。]
+]
+
+#danger[
+  したがって、お使いのモータドライバが車輪オドメトリから TF を配信する機能を
+  持っている場合は、#tsuyo[必ずその機能をオフにしてください。]
+  モータドライバが `odom` → `base_link` を配信すると、
+  #tsuyo[同じ座標系に 2 つの親ができて位置が飛び跳ね]、
+  自律走行がまっすぐ走らなくなります。
+]
+
+どのノードがどの TF を配信しているかを @tab-tf-owner に示します。
+#tsuyo[この表に無い TF を、お使いのモータドライバから配信しないでください。]
+
+#figure(
+  stable(
+    columns: (auto, auto, 1fr),
+    [*TF*], [*配信するノード*], [*内容*],
+    [`map` → `odom`], [`simple_fastlio_localization`],
+    [地図上での自己位置（平面）],
+    [`map` → `lio_odom`], [`simple_fastlio_localization`],
+    [地図上での自己位置（3 次元）],
+    [`odom` → `base_link`], [`simple_fastlio_localization`],
+    [#tsuyo[ここが競合しやすい箇所です]],
+    [`lio_odom` → `yvt`], [RSF のノード（`hokuyo_rsf`）],
+    [LIO が推定した LiDAR の位置。名前は #path[config/rsf_node_config.yaml] で決まります],
+    [`base_link` → 各センサ], [`robot_state_publisher`],
+    [#path[urdf/arno.xacro] に書かれた取り付け位置（`yvt`、`gnss`、`camera` など）。静的 TF],
+  ),
+  caption: [TF を配信しているノード],
+) <tab-tf-owner>
+
+==== オフにする方法
+
+パラメータ名はモータドライバによって異なります。
+よくある名前を @tab-tf-off に挙げます。
+#tsuyo[見つからない場合は、そのドライバの取扱説明書で「TF」「odom」を探してください。]
+
+#figure(
+  stable(
+    columns: (auto, 1fr),
+    [*よくあるパラメータ名*], [*設定する値*],
+    [`publish_tf` / `publish_odom_tf` / `enable_tf`], [`false`],
+    [`odom_tf` / `broadcast_tf`], [`false`],
+    [（パラメータが無い場合）], [下の「ダミーのフレーム名を使う」を参照],
+  ),
+  caption: [TF 配信をオフにするパラメータの例],
+) <tab-tf-off>
+
+#note[
+  #tsuyo[TF を止めるパラメータが用意されていないドライバもあります。]
+  その場合は、#tsuyo[配信先のフレーム名を、どこにも繋がらない名前に変えて]しまえば
+  実害がなくなります。サンプルの `icart_mini_driver` がこの方法をとっており、
+  #path[config/driver_node.param.yaml] で子フレーム名を `dummy_base_link` にしています。
+
+  #terminal[```yaml
+icart_mini_driver_node:
+  ros__parameters:
+    odom_frame_id: odom
+    base_frame_id: dummy_base_link   # ← base_link にしない
+```]
+
+  こうすると配信されるのは `odom` → `dummy_base_link` になります。
+  `dummy_base_link` は #path[arno.xacro] に存在しないフレームなので、
+  #tsuyo[TF の木からぶら下がるだけで、走行には影響しません]。
+]
+
+==== 確認方法
+
+モータドライバを起動した状態で、TF が二重になっていないかを確認します。
+
+#terminal[```bash
+ros2 run rqt_tf_tree rqt_tf_tree
+```]
+
+@sub-frames-ok のように #tsuyo[`map` → `odom` → `base_link` が 1 本の線でつながって]いれば正常です。
+
+#warn[
+  端末に次のような警告が繰り返し出ている場合は、TF が二重に配信されています。
+  お使いのモータドライバ側の設定を見直してください。
+
+  #console(title: "TF が二重になっているときの警告")[```
+TF_REPEATED_DATA ignoring data with redundant timestamp for frame base_link
+TF_OLD_DATA ignoring data from the past for frame base_link
+```]
+]
+
+#tip[
+  どのノードが `/tf` を配信しているかは、次のコマンドで一覧できます。
+  #tsuyo[身に覚えのないノードが並んでいないか]を確認してください。
+
+  #terminal[```bash
+ros2 topic info /tf --verbose | grep -A1 "Node name"
+```]
+]
+
+=== 速度指令のトピック名を合わせる <subsubsec-setup-userdriver-cmdvel>
+
+本ソフトウェアは、自律走行時に #tsuyo[`wizurg/cmd_vel`]（`geometry_msgs/Twist`）へ
+速度指令を出します（@tab-topics）。
+お使いのモータドライバが別の名前を購読している場合は、次のどちらかで合わせます。
+
+#figure(
+  stable(
+    columns: (auto, 1fr),
+    [*方法*], [*内容*],
+    [起動ファイルで名前を変換する],
+    [上の例のように `<remap from="cmd_vel" to="wizurg/cmd_vel"/>` を書きます。
+     #tsuyo[ドライバ側を改造しなくてよいため、こちらを推奨します]],
+    [本ソフトウェア側を変える],
+    [#path[scripts/navigation/nav_single_map.sh] と
+     #path[scripts/navigation/nav_multi_map.sh] の
+     `cmd_vel_topic:=wizurg/cmd_vel` を書き換えます。
+     #tsuyo[2 か所とも直す必要があります]],
+  ),
+  caption: [速度指令のトピック名を合わせる方法],
+) <tab-cmdvel-match>
+
+合っているかどうかは、ジョイスティックで動かしながら確認するのが確実です
+（@subsubsec-vizanti-teleop）。
+指令が届いていない場合は @err-motor-jog を参照してください。
 
 == うまくいかないときは <subsec-setup-trouble>
 
@@ -687,6 +946,8 @@ colcon build --symlink-install --packages-select hokuyo_navigation2
     [シリアルポートを開けない], [@err-serial-perm],
     [Humble と Jazzy が混ざってしまった], [@err-distro-mix],
     [GUI サーバの起動時に Python のエラーが出る], [@err-server-py],
+    [別のモータドライバに替えたら位置が飛び跳ねる], [@subsubsec-setup-userdriver-tf],
+    [別のモータドライバに替えたらロボットが動かない], [@err-motor-jog],
   ),
   caption: [セットアップでよくある症状],
 ) <tab-setup-trouble>

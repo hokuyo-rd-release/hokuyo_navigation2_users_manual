@@ -227,10 +227,12 @@ sudo ufw allow 9090/tcp
   cause: [
     Vizanti にトピックの一覧を教える `rosapi` というノードが、
     起動直後に停止しています。\
-    #dist-jazzy #tsuyo[ROS 2 Jazzy で起こります。]
-    Jazzy では `get_parameter_value` という関数の置き場所が
-    `ros2param.api` から `rclpy.parameter` に移動しましたが、
-    `rosbridge_suite` 側が古い置き場所を参照しているためです。\
+    原因は、`rosbridge_suite` が
+    #tsuyo[使用中の ROS ディストリビューションと違うブランチ]に
+    なっていることです。
+    #dist-humble 用の古いブランチのまま #dist-jazzy で動かすと、
+    Jazzy で置き場所が変わった関数（`get_parameter_value`）を
+    読み込めずに停止します。\
     トピックの一覧が取れないだけで、Vizanti の表示自体は動くため、
     #tsuyo[「画面は出ているのに選べない」という分かりにくい症状]になります。
   ],
@@ -242,25 +244,38 @@ sudo ufw allow 9090/tcp
 ros2 service call /rosapi/topics_for_type \
   rosapi_msgs/srv/TopicsForType "{type: 'sensor_msgs/msg/PointCloud2'}"
 ```]
-    + #path[rosbridge_suite/rosapi/src/rosapi/params.py] の 43 行目付近を、
-      次のように書き換えます。
+    + `rosbridge_suite` が#tsuyo[どのブランチになっているか]を確認します。
+      `*` が付いている行が現在のブランチです。
 
-      #terminal[```python
-# 変更前
-from ros2param.api import call_get_parameters, call_set_parameters, get_parameter_value
+      #terminal[```bash
+cd ~/colcon_ws/src/hokuyo_navigation2/rosbridge_suite
+git branch
+```]
 
-# 変更後
-from ros2param.api import call_get_parameters, call_set_parameters
-try:
-    from ros2param.api import get_parameter_value
-except ImportError:  # ROS 2 Jazzy 以降は rclpy.parameter に移動した
-    from rclpy.parameter import get_parameter_value
+      #console(title: "誤ったブランチになっている例")[```
+* humble
+  jazzy
+```]
+    + @tab-pkg-submodules の#tsuyo[正しいブランチに切り替えます]。
+      Jazzy であれば `jazzy` です。
+
+      #terminal[```bash
+cd ~/colcon_ws/src/hokuyo_navigation2
+git submodule update --init --remote rosbridge_suite
+```]
+
+      うまく切り替わらない場合は、直接指定します。
+
+      #terminal[```bash
+cd ~/colcon_ws/src/hokuyo_navigation2/rosbridge_suite
+git fetch origin
+git checkout jazzy
 ```]
     + ビルドし直し、サーバを起動し直します。
 
       #terminal[```bash
 cd ~/colcon_ws
-colcon build --packages-select rosapi
+colcon build --packages-select rosapi rosbridge_library rosbridge_server
 source install/setup.bash
 cd ~/colcon_ws/src/hokuyo_navigation2/hokuyo_navigation2/scripts
 ./stop_server.sh && ./start_server.sh
@@ -278,6 +293,13 @@ rosapi_msgs.srv.TopicsForType_Response(topics=['/hokuyo3d/hokuyo_cloud2'])
     トピックが並ぶようになれば復旧しています。
   ],
 ) <err-vizanti-rosapi>
+
+#danger[
+  #tsuyo[この症状を、`rosbridge_suite` のソースを書き換えて直さないでください。]
+  一時的に動くようになっても、次に `git submodule update` を実行したときに
+  変更が失われ、同じ症状が再発します。
+  #tsuyo[ブランチを切り替えるのが正しい直し方]です。
+]
 
 #errorcard(
   [ボタンが灰色で押せない],
@@ -3253,6 +3275,16 @@ ros2 run rqt_tf_tree rqt_tf_tree
       もう一度開始してください。自己位置推定は初期位置の近くから探索を始めます。
     + 周囲の環境が地図作成時から大きく変わっている（棚の移動、車両の駐車など）と
       照合に失敗します。その場合は地図を作り直してください。
+    + #tsuyo[サンプル以外のモータドライバを使っている場合]は、
+      そのドライバが `odom` → `base_link` の TF を配信していないか確認してください。
+      同じ TF を 2 つのノードが配信していると、
+      木はつながって見えるのに#tsuyo[位置が小刻みに飛び跳ねます]。
+      端末に次の警告が繰り返し出ていれば、これが原因です（@subsubsec-setup-userdriver-tf）。
+
+      #console(title: "TF が二重に配信されているときの警告")[```
+TF_REPEATED_DATA ignoring data with redundant timestamp for frame base_link
+TF_OLD_DATA ignoring data from the past for frame base_link
+```]
   ],
   verify: [
     `rqt_tf_tree` で木が 1 つにつながっていること。

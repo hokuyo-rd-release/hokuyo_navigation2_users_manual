@@ -176,6 +176,24 @@
 // 用語や前提知識のいらない読者向けのやさしい言い換え
 #let plain(body) = _callout(body, label: "かんたんに言うと", accent: luma(90), icon: "→")
 
+// 本ソフトウェアの設計方針を言い切るための囲み。
+// 「どちらでもできます」と読まれると困る箇所に使う。
+#let policy(body) = block(
+  width: 100%,
+  inset: (left: 11pt, right: 11pt, top: 9pt, bottom: 9pt),
+  radius: 3pt,
+  fill: c-brand.lighten(94%),
+  stroke: 1.2pt + c-brand,
+  breakable: true,
+  {
+    text(font: gothic, weight: "bold", size: 9.5pt, fill: c-brand.darken(35%))[◆ 本ソフトウェアの方針]
+    v(4pt, weak: true)
+    set text(size: 9.5pt)
+    set par(first-line-indent: 0em)
+    body
+  },
+)
+
 // =============================================================
 // 操作手順・UI 部品
 // =============================================================
