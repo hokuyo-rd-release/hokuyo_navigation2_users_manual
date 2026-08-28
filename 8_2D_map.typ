@@ -60,15 +60,43 @@ waypoint に対して通行可能領域の設定範囲、`z`方向の下限と�
   grid(
     columns: (1fr, 1fr, 1fr),
     gutter: 6pt,
-    capture-todo("C-12", [悪い例：真っ黒 \ 地面や天井が写り込んだ状態], height: 40mm),
-    capture-todo("C-11", [良い例 \ 壁と柱だけが写った状態], height: 40mm),
-    capture-todo("C-13", [悪い例：真っ白 \ 障害物が消えた状態], height: 40mm),
+    [#figure(
+      image("img/m_pgm_dark.png", width: 100%),
+      caption: [悪い例：黒く潰れる \ `thre_z_min` が低すぎる],
+    ) <sub-pgm-dark>],
+    [#figure(
+      image("img/m_pgm_good.png", width: 100%),
+      caption: [良い例 \ 壁と柱だけが写っている],
+    ) <sub-pgm-good>],
+    [#figure(
+      image("img/m_pgm_light.png", width: 100%),
+      caption: [悪い例：白く消える \ 高さの範囲が狭すぎる],
+    ) <sub-pgm-light>],
   ),
-  caption: [2D 地図の良い例と悪い例（撮影待ち）],
+  caption: [同じ 3D 点群地図から、高さのしきい値だけを変えて作った 2D 地図],
 ) <im-2dmap-compare>
 
-#text(size: 8.5pt)[
-  ※ 上記3枚は実機データでの撮影待ちです。撮影依頼の詳細は @tab-capture-p3 を参照してください。
+#note[
+  上の 3 枚は#tsuyo[まったく同じ 3D 点群地図]から作ったものです。
+  違うのは `thre_z_min` と `thre_z_max` の 2 つだけです。
+
+  #figure(
+    stable(
+      columns: (auto, auto, auto, 1fr),
+      [*例*], [`thre_z_min`], [`thre_z_max`], [*結果*],
+      [悪い例（左）], [`-5.0`], [`20.0`],
+      [地面と天井まで取り込み、通路の中まで黒い点で埋まる],
+      [良い例（中央）], [`-0.2`], [`2.0`],
+      [ロボットがぶつかる高さの壁・柱だけが残る],
+      [悪い例（右）], [`1.50`], [`1.60`],
+      [範囲が狭すぎて障害物がほとんど消え、壁の一部しか残らない],
+    ),
+    caption: [3 枚の違いを生んだパラメータ],
+  ) <tab-2dmap-compare-params>
+
+  黒く潰れると Nav2 が「どこも通れない」と判断し、
+  白く消えると「障害物が無い」と判断して壁に向かって進みます。
+  #tsuyo[どちらも走行できません。]
 ]
 
 @tab-2dmap-tuning に、症状ごとの調整方法をまとめます。

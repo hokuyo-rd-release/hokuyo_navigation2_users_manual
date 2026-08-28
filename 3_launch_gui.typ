@@ -150,12 +150,97 @@ GUIアプリケーション画面は、主にメイン画面、3D Viewer、Vizan
     caption: [「現在のモード」の表示],
   ) <tab-gui-modes>
 
+  実際の画面を @im-gui-modes に示します。
+  #tsuyo[ボタンの色と、上部の文字の両方で状態が分かります。]
+
+  #figure(
+    grid(
+      columns: (1fr, 1fr, 1fr, 1fr, 1fr),
+      gutter: 4pt,
+      [#figure(
+        image("img/g_main_stopped.png", width: 100%),
+        caption: [停止モード],
+      ) <sub-mode-stopped>],
+      [#figure(
+        image("img/g_main_ctrl.png", width: 100%),
+        caption: [手動操作モード],
+      ) <sub-mode-ctrl>],
+      [#figure(
+        image("img/g_main_mapping.png", width: 100%),
+        caption: [マッピングモード],
+      ) <sub-mode-mapping>],
+      [#figure(
+        image("img/g_main_running.png", width: 100%),
+        caption: [自律走行モード],
+      ) <sub-mode-running>],
+      [#figure(
+        image("img/g_main_noserver.png", width: 100%),
+        caption: [サーバ接続なし],
+      ) <sub-mode-noserver>],
+    ),
+    caption: [「現在のモード」ごとのメイン画面。
+              停止モード以外では 4 つのボタンが灰色になる],
+  ) <im-gui-modes>
+
   #note[
     停止モード以外では、誤操作を防ぐために
     #btn[データ取得] #btn[マッピング] #btn[自律走行] #btn[ファイル管理]
     の4つが灰色になり押せなくなります。#tsuyo[これは異常ではありません]（@err-btn-disabled）。
     別の操作をしたいときは、先に #btn[ロボット停止] を押して停止モードに戻してください。
+
+    #tsuyo[#btn[ロボット停止] と #btn[Map Viewer] は、どのモードでも押せます。]
+    走行中に地図や経路を確認したいときは #btn[Map Viewer] を使ってください。
   ]
+
+  === ボタンを押したあとに開く画面 <subsubsec-gui-popups>
+
+  #btn[マッピング]、#btn[自律走行]、#btn[ファイル管理] は、
+  押すと @im-gui-popups の選択画面が重ねて表示されます。
+  #tsuyo[この時点ではまだ何も実行されていません。]
+  選択画面を閉じたい場合は #btn[閉じる] を押してください。
+
+  #figure(
+    grid(
+      columns: (1fr, 1fr),
+      gutter: 8pt,
+      [#figure(
+        image("img/g_popup_mapping.png", width: 100%),
+        caption: [#btn[マッピング] の選択画面],
+      ) <sub-popup-mapping>],
+      [#figure(
+        image("img/g_popup_filemgmt.png", width: 100%),
+        caption: [#btn[ファイル管理] の選択画面],
+      ) <sub-popup-files>],
+    ),
+    caption: [ボタンを押したあとに表示される選択画面],
+  ) <im-gui-popups>
+
+  #figure(
+    stable(
+      columns: (auto, auto, 1fr),
+      [*ボタン*], [*開く画面*], [*内容*],
+      [#btn[データ取得]], [—],
+      [選択画面はなく、#tsuyo[すぐにセンサとモータドライバが起動します]（@sec-get-data）],
+      [#btn[マッピング]], [@sub-popup-mapping],
+      [`p2o` / `lio_raw` / `pcd2pgm` から選びます（@sec-mapping、@sec-2d-map）],
+      [#btn[自律走行]], [@sub-popup-nav],
+      [安全確認のチェックと、地図・経路・走行モードを選びます（@sec-navigation）],
+      [#btn[ファイル管理]], [@sub-popup-files],
+      [マップ / ウェイポイント / 設定ファイルの管理へ進みます（@sec-files）],
+    ),
+    caption: [各ボタンを押したときの動作],
+  ) <tab-gui-buttons>
+
+  #danger[
+    #btn[データ取得] だけは#tsuyo[確認画面がなく、押した瞬間にロボットが動く準備に入ります]。
+    周囲の安全を確認してから押してください。
+  ]
+
+  #figure(
+    image("img/g_popup_nav_unchecked.png", width: 58%),
+    caption: [#btn[自律走行] の選択画面。3 つすべてにチェックを入れるまで
+              #btn[自律走行開始] は灰色のまま押せない],
+  ) <sub-popup-nav>
 
   #warn[
     「サーバ接続なし」と表示された場合は、GUI サーバが落ちています。
@@ -186,6 +271,44 @@ GUIアプリケーション画面は、主にメイン画面、3D Viewer、Vizan
   caption: [ファイル管理],
 ) <sub6>
 
+== 実行を開始したときの画面 <subsec-gui-started>
+
+#btn[データ取得]、マッピング、自律走行を開始すると、
+それぞれ @im-gui-started の画面が新しいタブに表示されます。
+#tsuyo[この画面が出れば、処理の起動までは成功しています。]
+
+#figure(
+  grid(
+    columns: (1fr, 1fr, 1fr),
+    gutter: 6pt,
+    [#figure(
+      image("img/g_msg_ctrl.png", width: 100%),
+      caption: [データ取得の開始],
+    ) <sub-msg-ctrl>],
+    [#figure(
+      image("img/g_msg_mapping.png", width: 100%),
+      caption: [マッピングの開始],
+    ) <sub-msg-mapping>],
+    [#figure(
+      image("img/g_msg_nav.png", width: 100%),
+      caption: [自律走行の開始],
+    ) <sub-msg-nav>],
+  ),
+  caption: [処理を開始したときに表示される画面],
+) <im-gui-started>
+
+#warn[
+  #tsuyo[この画面は「起動を指示した」ことしか意味しません。]
+  処理が正しく進んでいるかは、同時に開く#tsuyo[端末の表示]で確認してください。
+  端末が 1 つも開かない場合は @err-noterm を参照してください。
+]
+
+#note[
+  これらのタブは、内容を確認したら閉じてかまいません。
+  #tsuyo[ただし、処理を実行している端末は閉じないでください。]
+  閉じると処理が途中で止まります。
+]
+
 == うまくいかないときは <subsec-gui-trouble>
 
 #figure(
@@ -196,6 +319,7 @@ GUIアプリケーション画面は、主にメイン画面、3D Viewer、Vizan
     [「サーバ接続なし」と表示される], [@err-gui-noserver],
     [ボタンが灰色で押せない], [@err-btn-disabled],
     [Vizanti が真っ白で何も表示されない], [@err-vizanti],
+    [Vizanti のトピック一覧が空で選べない], [@err-vizanti-rosapi],
     [Map Viewer に地図や経路が出ない], [@err-viewer-noload],
     [ファイル選択画面でフォルダを開けない], [@err-path-denied],
     [ファイル名を変更できない], [@err-rename],
@@ -203,15 +327,34 @@ GUIアプリケーション画面は、主にメイン画面、3D Viewer、Vizan
   caption: [GUI でよくある症状],
 ) <tab-gui-trouble>
 
-#capture-todo(
-  "C-05",
-  [ブラウザ上部に赤い帯でエラーが表示されている画面。
-   「これがエラー表示です」と分かる見本として使用],
-  height: 40mm,
-)
-#v(3pt)
-#text(size: 8.5pt)[
-  ※ 撮影待ちです。撮影依頼の詳細は @tab-capture-p1 を参照してください。
+=== エラーはどこに表示されるか <subsubsec-gui-flash>
+
+GUI での操作に失敗すると、@im-gui-flash のように
+#tsuyo[画面の上部に色の付いた帯]でメッセージが表示されます。
+#tsuyo[エラーが出たときは、まずこの帯の文言を読んでください。]
+そのままの文言で @sec-trouble から探すのが最短です。
+
+#figure(
+  image("img/g_flash_error.png", width: 88%),
+  caption: [操作に失敗したときの表示（赤い帯がエラーメッセージ）],
+) <im-gui-flash>
+
+#figure(
+  stable(
+    columns: (auto, 1fr),
+    [*色*], [*意味*],
+    [赤], [エラー。#tsuyo[操作は実行されていません]],
+    [黄], [警告。一部だけ実行されています。結果を必ず確認してください],
+    [青], [案内。次に何をすればよいかの指示です],
+    [緑], [成功。操作は完了しています],
+  ),
+  caption: [帯の色と意味],
+) <tab-gui-flash-colors>
+
+#warn[
+  帯は#tsuyo[ページを切り替えると消えます]。
+  読み逃した場合は、同じ操作をもう一度行って文言を確認してください。
+  色と意味の詳細は @err-flash を参照してください。
 ]
 
 #pagebreak()

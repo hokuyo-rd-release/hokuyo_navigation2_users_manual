@@ -1,169 +1,120 @@
 #import "utils.typ": *
 
-= 画面キャプチャ撮影依頼リスト <sec-appendix-capture>
+= 画面キャプチャ一覧 <sec-appendix-capture>
 
-本書は、既存のマニュアルおよび各リポジトリに収録されていた実画面を使用して構成しています。
-本付録は、#tsuyo[実機でしか撮影できない画面]のうち、
-追加で撮影いただくと本書の分かりやすさが大きく向上する箇所の一覧です。
+本書に掲載している画面は、@tab-capture-source の 3 つの経路で用意しています。
+改訂時の差し替えの目安としてご利用ください。
 
-#note[
-  この付録は#tsuyo[制作用の作業リスト]です。
-  撮影と差し替えが完了したら、本付録ごと削除してください。
-]
-
-== 撮影と差し替えの手順 <subsec-capture-howto>
-
-#fstep(1, [撮影する], [
-  下表の「撮影内容」に従って画面を撮影します。
-  #tsuyo[画面全体ではなく、必要な部分が読める大きさ]で撮影してください。
-  端末の文字が判読できることが最優先です。
-])
-#fstep(2, [ファイルを置く], [
-  撮影した画像を #path[img/] フォルダに、下表の「ファイル名」で保存します。
-  形式は PNG を推奨します。
-])
-#fstep(3, [本文に差し込む], [
-  該当する章の `capture-todo(...)` の行を、次の形に置き換えます。
-
-  #terminal[```typst
 #figure(
-  image("img/<ファイル名>", width: 85%),
-  caption: [<キャプション>],
-) <ラベル>
-```]
-])
+  stable(
+    columns: (auto, 1fr, auto),
+    [*経路*], [*内容*], [*差し替え*],
+    [実機操作画面],
+    [GUI サーバを起動し、ブラウザ上の画面をそのまま取得したもの],
+    [随時可能],
+    [実データ実行],
+    [収録済みの rosbag と地図を用いて処理を実行し、
+     端末出力・RViz2 画面・2D 地図を取得したもの],
+    [随時可能],
+    [現場撮影],
+    [実際のロボットが動いている様子など、
+     #tsuyo[現場でしか撮影できないもの]],
+    [要撮影],
+  ),
+  caption: [掲載画面の出所],
+) <tab-capture-source>
 
-== 撮影依頼一覧 <subsec-capture-list>
+== 現場でしか撮影できないもの <subsec-capture-field>
 
-=== 最優先（トラブルシューティングの精度に直結）
+次の内容は、実機が現場で稼働していないと撮影できません。
+掲載できると本書の分かりやすさが向上します。
 
 #figure(
   stable(
     columns: (auto, auto, 1fr),
     [*ID*], [*ファイル名*], [*撮影内容と条件*],
 
-    [C-01], [`rviz_status_green.png`],
-    [RViz2 画面左上のオーバーレイ文字を拡大したもの。
-     #tsuyo[GNSS 精度が「良好」（緑）、Lidar Odom Rate が緑]の状態。
-     正常時の見本として使用します（@subsec-nav-monitor）],
+    [F-01], [`field_running.png`],
+    [経路に沿って実際に自律走行しているロボットの外観。
+     周囲の環境（屋外／屋内）が分かる画角で],
 
-    [C-02], [`rviz_status_red.png`],
-    [同上で、#tsuyo[GNSS 精度が「低い」（赤）]、
-     または Lidar Odom Rate が赤・N/A の状態。
-     異常時の見本として使用します（@err-no-gnss、@err-lio-slow）],
+    [F-02], [`field_teleop.png`],
+    [データ取得時に、タブレットのバーチャルジョイスティックで
+     ロボットを手動操作している様子（@sec-get-data）],
 
-    [C-03], [`tf_tree_ok.png`],
-    [`rqt_tf_tree` の実行結果。#tsuyo[`loc` モードで正常走行中]のもの。
-     `map` → `odom` → `base_link` がつながっていることが読める大きさで。
-     #text(fill: rgb("#1F8A4C"))[※ 既存画像を掲載済み。より新しい構成のものがあれば差し替え]],
+    [F-03], [`field_rsf.png`],
+    [ロボットに搭載された RSF-X001 の取り付け状態。
+     ケーブルの取り回しが分かるもの],
 
-    [C-04], [`tf_tree_ng.png`],
-    [同上で、#tsuyo[自己位置推定に失敗している状態]。
-     `map` が切り離されていることが分かるもの（@err-tf-broken）。
-     #text(fill: rgb("#1F8A4C"))[※ 既存画像を掲載済み。より新しい構成のものがあれば差し替え]],
+    [F-04], [`field_estop.png`],
+    [非常停止スイッチの位置。@subsec-safety の安全説明に使用],
 
-    [C-05], [`err_flash_message.png`],
-    [ブラウザ上部に赤い帯でエラーが表示されている画面。
-     利用者が「これがエラー表示です」と認識できる見本として使用します],
+    [F-05], [`nav_terminal_field.png`],
+    [現場で自律走行を開始したときの端末。
+     `ウェイポイント追従を開始します:` 以降が写っているもの
+     （@subsubsec-nav-inside の掲載例と差し替え）],
   ),
-  caption: [撮影依頼（最優先）],
-) <tab-capture-p1>
+  caption: [現場での撮影依頼一覧],
+) <tab-capture-field>
 
-=== 優先（自律走行章の理解に直結）
+== 掲載済みの画面 <subsec-capture-placed>
+
+本書に掲載している主な画面の一覧です。
 
 #figure(
   stable(
-    columns: (auto, auto, 1fr),
-    [*ID*], [*ファイル名*], [*撮影内容と条件*],
-
-    [C-06], [`nav_terminal_start.png`],
-    [自律走行の開始直後の端末。
-     `--- 実行パラメータ ---` から
-     `ウェイポイント追従を開始します:` までが写っていること（@subsec-nav-single）],
-
-    [C-07], [`nav_terminal_retry.png`],
-    [`エラー: waypoint_managerが異常終了しました。15秒後に再試行します...`
-     と再起動待機のカウントダウンが写っている端末（E-508）],
-
-    [C-08], [`nav_rviz_running.png`],
-    [自律走行中の RViz2 全景。
-     2D 地図・経路・ロボット位置・計画経路が一度に写っていること。
-     #text(fill: rgb("#1F8A4C"))[※ 既存画像を掲載済み。現場での実走行時のものがあれば差し替え]],
-
-    [C-09], [`multi_map_terminal.png`],
-    [マルチマップ走行で地図が切り替わる場面の端末。
-     `次のマップまであと N 秒...` のカウントダウンが写っていること],
-
-    [C-10], [`nav_stop_screen.png`],
-    [#btn[ロボット停止] を押した直後のブラウザ画面
-     （「自律走行プログラムを終了します...」の表示）],
+    columns: (auto, 1fr, auto),
+    [*章*], [*掲載内容*], [*出所*],
+    [@sec-gui], [メイン画面（停止／手動操作／サーバ接続なし）、
+                 各ボタンの選択画面、エラーの帯], [実機操作画面],
+    [@sec-config], [設定ファイル管理、テキスト編集、シナリオ編集], [実機操作画面],
+    [@sec-config], [マッピング開始時の設定値一覧], [実データ実行],
+    [@sec-get-data], [Vizanti の全画面（アイコンバー、ウィジェット追加、
+                      Global Settings、TF、Pose Tracker、Bag Recorder、
+                      Joystick Teleop）], [実機操作画面],
+    [@sec-get-data], [rosbag 記録中のジョイスティック操作、記録中のアイコン], [実機操作画面],
+    [@sec-mapping], [マッピング実行時の端末出力（正常時・失敗時）], [実データ実行],
+    [@sec-mapping], [GNSS 品質ログの内容], [実データ実行],
+    [@sec-waypoint], [3D Viewer の表示と編集], [実機操作画面],
+    [@sec-2d-map], [2D 地図の良い例・悪い例（同一点群から生成）], [実データ実行],
+    [@sec-navigation], [自律走行の開始画面、RViz2 画面、状態表示の文字], [実データ実行],
+    [@sec-files], [ファイル管理、ROS Bag ブラウザ、変換設定画面], [実機操作画面],
   ),
-  caption: [撮影依頼（優先）],
-) <tab-capture-p2>
-
-=== できれば（品質向上）
-
-#figure(
-  stable(
-    columns: (auto, auto, 1fr),
-    [*ID*], [*ファイル名*], [*撮影内容と条件*],
-
-    [C-11], [`pgm_good.png`],
-    [適切に変換できた 2D 地図。壁と柱だけが写っているもの],
-
-    [C-12], [`pgm_too_dark.png`],
-    [地面や天井まで写り込んで真っ黒になった 2D 地図（E-403）],
-
-    [C-13], [`pgm_too_light.png`],
-    [障害物が消えて真っ白になった 2D 地図（E-404）],
-
-    [C-14], [`mapping_config_echo.png`],
-    [マッピング開始時に端末へ表示される設定値の一覧
-     （`gnss_topic: ...` 以下）。設定確認の見本として使用します（@err-csv-order）],
-
-    [C-15], [`gnss_log_csv.png`],
-    [`gnss_log/` に出力された CSV を開いた画面。
-     fix 率の確認方法の説明に使用します（@err-fix-rate）],
-
-    [C-16], [`file_management.png`],
-    [ファイル管理画面で `map/` の中身を表示したもの。
-     `.pcd` `.pgm` `.yaml` が同じ名前で並んでいる状態（@err-map-name）。
-     #text(fill: rgb("#1F8A4C"))[※ 既存画像を掲載済み。差し替え任意]],
-  ),
-  caption: [撮影依頼（できれば）],
-) <tab-capture-p3>
-
-== 本文への配置状況 <subsec-capture-placed>
-
-現時点で、本文中にプレースホルダを配置済みの箇所は次のとおりです。
-撮影後は、この一覧の箇所を `image()` に置き換えてください。
-
-#figure(
-  stable(
-    columns: (auto, 1fr),
-    [*ID*], [*配置箇所*],
-    [C-01, C-02], [@subsec-nav-monitor（自律走行中の状態確認）],
-    [C-05], [@subsec-gui-trouble（GUI でよくある症状）],
-    [C-06, C-07], [@subsubsec-nav-inside（開始後に内部で起きていること）],
-    [C-09], [@subsubsec-nav-multi-flow（マルチマップ走行の進み方）],
-    [C-10], [@subsec-nav-stop（停止のしかた）],
-    [C-11, C-12, C-13], [@subsec-2dmap-tips（2D 地図の調整のこつ）],
-    [C-14], [@subsec-config-verify（編集後の確認）],
-    [C-15], [@subsec-mapping-gnsslog（GNSS の品質を確認する）],
-  ),
-  caption: [プレースホルダの配置箇所],
+  caption: [掲載済み画面の一覧],
 ) <tab-capture-placed>
 
-C-03、C-04、C-08、C-16 については、既存の画像を本文に掲載済みです。
-より新しいもの・現場で撮影したものが用意できれば差し替えてください。
+== 画面を取り直す手順 <subsec-capture-howto>
 
-== プレースホルダの表示例 <subsec-capture-placeholder>
+GUI の画面は、GUI サーバを起動した状態でブラウザから取得できます。
 
-本文中で撮影待ちの箇所は、次のような枠で示されます。
+#fstep(1, [GUI サーバを起動する], [
+  #terminal[```bash
+cd ~/colcon_ws/src/hokuyo_navigation2/hokuyo_navigation2/scripts
+./start_server.sh
+```]
+])
+#fstep(2, [ブラウザで対象の画面を開く], [
+  #link("http://localhost:5050")[`http://localhost:5050`] から
+  該当のボタンをたどります。
+])
+#fstep(3, [撮影して差し替える], [
+  撮影した画像を #path[img/] に、既存と同じファイル名で上書き保存します。
+  ファイル名を変える場合は、該当する章の `image("img/...")` も書き換えてください。
+])
 
-#capture-todo(
-  "C-01",
-  [RViz2 のオーバーレイ文字（正常時・緑）],
-)
+#note[
+  Vizanti の画面（@subsec-vizanti-ui）は、
+  #link("http://localhost:5000")[`http://localhost:5000`] から取得します。
+  #tsuyo[ロボットのノードが起動していないと、トピックの一覧が空のまま]になり、
+  Bag Recorder や Joystick Teleop の設定画面を撮影できません。
+  必ず #btn[データ取得] でノードを起動した状態、または rosbag を再生した状態で
+  撮影してください。
+]
+
+#note[
+  端末の出力は、画面を撮影するよりも
+  #tsuyo[文字をそのまま本文に貼り付けるほう]が読みやすくなります。
+  本書では `#console(...)` の黒い枠がその用途です。
+]
 
 #pagebreak()

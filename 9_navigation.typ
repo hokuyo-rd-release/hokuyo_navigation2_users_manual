@@ -92,18 +92,27 @@
 #figure(
   grid(
     columns: (1fr, 1fr),
-    gutter: 10pt,
+    gutter: 8pt,
     [#figure(
-      image("img/nav_single_popup.png", width: 100%),
-      caption: [単一マップ走行の開始画面],
+      image("img/g_popup_nav_loc.png", width: 100%),
+      caption: [単一マップ走行（`single_map_loc`）。\
+                `MAPFILE` と `WPFILE` の欄が出る],
     ) <sub-nav-popup>],
     [#figure(
-      image("img/nav_multi_popup.png", width: 100%),
-      caption: [マルチマップ走行の開始画面],
+      image("img/g_popup_nav_multi.png", width: 100%),
+      caption: [マルチマップ走行（`multi_map`）。\
+                代わりに `CSVファイル` の欄が出る],
     ) <sub-nav-multi-popup>],
   ),
-  caption: [自律走行の開始画面],
+  caption: [`NAVTYPE` の選択によって変わる開始画面],
 ) <im-nav-popup>
+
+#note[
+  `NAVTYPE` を選ぶと、その下に出る欄が入れ替わります。
+  #tsuyo[`multi_map` を選ぶと `MAPFILE` と `WPFILE` は消え、
+  代わりに `CSVファイル` が現れます。]
+  欄が見当たらない場合は `NAVTYPE` の選択を確認してください。
+]
 
 === 開始後に内部で起きていること <subsubsec-nav-inside>
 
@@ -159,15 +168,50 @@ use_gnss_switch: false
 ウェイポイント追従を開始します: toyonaka.json
 ```]
 
-#grid(
-  columns: (1fr, 1fr),
-  gutter: 10pt,
-  capture-todo("C-06", [正常に開始したときの端末（実機）], height: 40mm),
-  capture-todo("C-07", [`waypoint_manager` の再試行が \ 繰り返されている端末], height: 40mm),
-)
-#v(3pt)
-#text(size: 8.5pt)[
-  ※ 撮影待ちです。撮影依頼の詳細は @tab-capture-p2 を参照してください。
+続いて、Nav2 の各プログラムが順に立ち上がります。
+#tsuyo[次の 2 行が出れば、走り出す準備が整っています。]
+
+#console(title: "起動が成功したときの端末")[```
+map_server の起動を待っています...
+現在の状態: inactive [2]
+Inactive 状態を検出しました。activate を実行します。
+map_server はすでに Active です。
+Nav2のライフサイクル状態とアクションサーバーの準備を監視しています...
+Nav2システムおよびアクションサーバーの準備が完全に完了しました。
+コストマップの安定化を待っています (3秒)...
+ウェイポイント追従を開始します: toyonaka.json
+[INFO] [nav2_waypoint_manager_executor]: Loaded 12 waypoints from toyonaka.json
+[INFO] [nav2_waypoint_manager_executor]: TF from map to base_link is available. Nav2 should be ready.
+[INFO] [nav2_waypoint_manager_executor]: Waiting for Nav2 action server...
+[INFO] [nav2_waypoint_manager_executor]: Sending goal for waypoint 0...
+[INFO] [nav2_waypoint_manager_executor]: Goal accepted. Starting custom arrival check...
+```]
+
+反対に、うまくいかないときは次のように#tsuyo[同じ内容が繰り返し表示され続けます]。
+これは異常です。@err-nav2-timeout から順に確認してください。
+
+#console(title: "起動に失敗して繰り返しているときの端末")[```
+エラー: Nav2の起動確認がタイムアウトしました。現在の状態: unconfigured
+エラー: Nav2の起動に失敗しました。再試行します...
+----------------------------------------------------
+マップの処理を開始します: toyonaka
+----------------------------------------------------
+（以下、同じ内容が繰り返される）
+```]
+
+#console(title: "waypoint_manager が異常終了して再試行しているときの端末")[```
+[ERROR] [nav2_waypoint_manager_executor]: Timeout waiting for TF from map to base_link \
+after 30.0 seconds. Shutting down.
+エラー: waypoint_managerが異常終了しました。15秒後に再試行します...
+ノードの終了を待っています...
+再起動待機中: 12 秒...
+```]
+
+#warn[
+  #tsuyo[繰り返しは自動では止まりません。]
+  同じ表示が 2 回以上出たら、いったん #btn[ロボット停止] を押し、
+  @sec-trouble で原因を調べてから再開してください。
+  放置すると、地図の読み込みとノードの起動が延々と繰り返されます。
 ]
 
 == マルチマップ走行の手順 <subsec-nav-multi>
@@ -221,15 +265,24 @@ map_file,waypoint_file,nav_type,interval
   @subsec-nav-stop の手順で停止してください。
 ]
 
-#capture-todo(
-  "C-09",
-  [マルチマップ走行で地図が切り替わる場面の端末。
-   「次のマップまであと N 秒...」のカウントダウンが写っているもの],
-  height: 38mm,
-)
-#v(3pt)
-#text(size: 8.5pt)[
-  ※ 撮影待ちです。撮影依頼の詳細は @tab-capture-p2 を参照してください。
+地図が切り替わる場面では、端末に次のように表示されます。
+#tsuyo[カウントダウンの間はロボットが停止したままになりますが、故障ではありません。]
+
+#console(title: "地図が切り替わるときの端末")[```
+waypoint_managerが正常に完了しました。
+----------------------------------------------------
+マップの処理を開始します: map2
+----------------------------------------------------
+次のマップまであと 10 秒...
+次のマップまであと 9 秒...
+次のマップまであと 8 秒...
+```]
+
+#note[
+  待ち時間はシナリオファイルの `interval` 列で決まります（@subsec-ref-scenario）。
+  短すぎると前の地図のノードが終了しきる前に次が起動し、
+  起動失敗（@err-nav2-timeout）の原因になります。
+  #tsuyo[10 秒以上を目安にしてください。]
 ]
 
 == 走行中の状態確認 <subsec-nav-monitor>
@@ -239,19 +292,61 @@ map_file,waypoint_file,nav_type,interval
 専門的な数値を読まなくても、色だけで正常・異常の見当がつきます。
 
 #figure(
-  image("img/rviz_nav.png", width: 88%),
-  caption: [自律走行中の RViz2 画面],
+  image("img/r_nav_orbit.png", width: 96%),
+  caption: [自律走行中の RViz2 画面（斜め上から見た表示）],
 ) <im-rviz-nav>
 
-#grid(
-  columns: (1fr, 1fr),
-  gutter: 10pt,
-  capture-todo("C-01", [オーバーレイ文字（正常時・緑）の拡大], height: 38mm),
-  capture-todo("C-02", [オーバーレイ文字（異常時・赤）の拡大], height: 38mm),
-)
-#v(4pt)
-#text(size: 8.5pt)[
-  ※ 上記2枚は実機での撮影待ちです。撮影依頼の詳細は @tab-capture-p1 を参照してください。
+#figure(
+  image("img/r_nav_top.png", width: 96%),
+  caption: [同じ場面を真上から見た表示。2D 地図と経路の関係が分かりやすい],
+) <im-rviz-nav-top>
+
+#figure(
+  stable(
+    columns: (auto, 1fr),
+    [*画面上の要素*], [*意味*],
+    [白い背景と黒い線], [2D 地図。黒い線が壁や柱],
+    [紫〜赤の帯], [コストマップ。#tsuyo[障害物の周囲に取られた余裕]。
+                    ここへは進入しません],
+    [水色の点], [いま見えているレーザの反射点（現在の周囲の様子）],
+    [青い矢印の列], [経路（ウェイポイント）。文字は各地点の属性と許容誤差],
+    [赤い矢印], [いま向かっている目標地点],
+    [左上の文字], [GNSS 精度と自己位置の種類（@im-overlay）],
+    [左下の `Navigation 2` 欄], [Nav2 の状態、残り距離、経過時間、復帰動作の回数],
+  ),
+  caption: [RViz2 画面の見方],
+) <tab-rviz-legend>
+
+#tip[
+  #tsuyo[`Recoveries`（復帰動作の回数）が増え続けている場合は要注意です。]
+  ロボットが進めずに、その場での回転や後退を繰り返しています。
+  経路が障害物に近すぎるか、2D 地図が実際と合っていません
+  （@err-wp-stuck、@subsec-2dmap-tips）。
+]
+
+#figure(
+  grid(
+    columns: (1fr,),
+    gutter: 8pt,
+    [#figure(
+      image("img/r_overlay_good.png", width: 92%),
+      caption: [正常時。GNSS が緑、自己位置の種類が水色],
+    ) <sub-overlay-good>],
+    [#figure(
+      image("img/r_overlay_mid.png", width: 92%),
+      caption: [注意。GNSS が黄色（精度が中程度）],
+    ) <sub-overlay-mid>],
+    [#figure(
+      image("img/r_overlay_bad.png", width: 92%),
+      caption: [異常時。GNSS が赤（精度が低い）],
+    ) <sub-overlay-bad>],
+  ),
+  caption: [画面左上に重ねて表示される状態の文字],
+) <im-overlay>
+
+#plain[
+  #tsuyo[読むのは色だけで構いません。]\
+  緑ならそのまま、黄色なら注意して見守る、赤なら止めて確認する、と覚えてください。
 ]
 
 === GNSS の精度表示
@@ -350,15 +445,10 @@ map_file,waypoint_file,nav_type,interval
 + 走行に関係するプロセスがすべて終了し、開いていた端末が閉じます。
 + メイン画面の「現在のモード」が「停止モード」に戻ります。
 
-#capture-todo(
-  "C-10",
-  [#btn[ロボット停止] を押した直後のブラウザ画面],
-  height: 34mm,
-)
-#v(3pt)
-#text(size: 8.5pt)[
-  ※ 撮影待ちです。撮影依頼の詳細は @tab-capture-p2 を参照してください。
-]
+#figure(
+  image("img/g_msg_stop.png", width: 72%),
+  caption: [#btn[ロボット停止] を押した直後の画面],
+) <im-nav-stopmsg>
 
 #note[
   #btn[ロボット停止] は、走行スクリプト本体・Nav2・自己位置推定・モータドライバ・

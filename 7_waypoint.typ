@@ -43,6 +43,39 @@ waypointファイルはjson形式で、下記の通りです。
 + @sub30 の状態から 「ウェイポイントファイル」「PCDファイル」のプルダウンからそれぞれファイルを選び、編集したいwaypointファイルと、周囲の環境を確認するための3D点群地図を選択します。
 + @im16 のように3D点群地図とwaypointが表示されたら、waypoint を選択し、@im17 に示す、「選択中のウェイポイント」ウィジェットと、ギズモが表示されているか確認して下さい。
 
+#warn[
+  #tsuyo[Map Viewer を開いただけでは、地図も経路も表示されません。]
+  必ず #btn[ロード] を押し、@im-viewer-load の画面で読み込む要素を選んでから
+  #btn[選択した要素をロード] を押してください。
+  「マップ名を指定してロードしてください。」と表示されたままの場合は、
+  この操作がまだ済んでいません。
+]
+
+#figure(
+  grid(
+    columns: (1fr, 1.35fr),
+    gutter: 8pt,
+    [#figure(
+      image("img/g_viewer_modal.png", width: 100%),
+      caption: [#btn[ロード] を押すと出る選択画面。
+                PCD・PGM/YAML・ウェイポイントを個別に選ぶ],
+    ) <im-viewer-load>],
+    [#figure(
+      image("img/g_viewer_pcd_pgm.png", width: 100%),
+      caption: [3D 点群地図（白い点）と 2D 地図（緑の面）を
+                重ねて表示した状態],
+    ) <im-viewer-loaded>],
+  ),
+  caption: [3D Viewer への読み込み],
+) <im-viewer-load-flow>
+
+#tip[
+  #tsuyo[3D 点群地図と 2D 地図を重ねて表示すると、
+  2D 地図の出来ばえをその場で確認できます。]
+  緑の面から壁がはみ出している、通路が塗り潰されている、といった問題は
+  この表示で見つけられます。調整方法は @subsec-2dmap-tips を参照してください。
+]
+
 == 3D Viewer の基本操作
 === ファイルの読み込み
 @im18 の「Grid & Map Settings」から行います。

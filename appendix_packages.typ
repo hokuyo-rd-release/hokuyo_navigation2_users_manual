@@ -12,6 +12,104 @@
   取得に失敗した場合は @err-submodule を参照してください。
 ]
 
+== リポジトリ一覧 <subsec-pkg-list>
+
+親リポジトリ #tsuyo[`Hokuyo-aut/hokuyo_navigation2`] に、
+@tab-pkg-submodules の 11 個のリポジトリがサブモジュールとして登録されています。
+#tsuyo[ブランチが指定されているものは、そのブランチが取得されます。]
+
+#figure(
+  stable(
+    columns: (auto, auto, auto),
+    [*フォルダ名*], [*取得元*], [*ブランチ*],
+    [`hokuyo_navigation2`], [`hokuyo-rd-release/hokuyo_navigation2`], [`jazzy`],
+    [`hokuyo_navigation2_gui`], [`hokuyo-rd-release/hokuyo_navigation2_gui`], [既定],
+    [`vizanti`], [`hokuyo-rd-release/vizanti`], [`release`],
+    [`rosbridge_suite`], [`hokuyo-rd-release/rosbridge_suite`], [`humble`],
+    [`hokuyo_slam_ros2`], [`hokuyo-rd-release/hokuyo_slam_ros2`], [既定],
+    [`simple_fastlio_localization_ros2`], [`hokuyo-rd/simple_fastlio_localization_ros2`], [`release`],
+    [`fix2xyz_packages_ros2`], [`hokuyo-rd-release/fix2xyz_packages_ros2`], [既定],
+    [`lio_nav2_bringup`], [`hokuyo-rd-release/lio_nav2_bringup`], [`release`],
+    [`waypoint_manager`], [`hokuyo-rd-release/waypoint_manager`], [既定],
+    [`jsk_visualization`], [`hokuyo-rd-release/jsk_visualization`], [`jazzy`],
+    [`nmea_msgs`], [`hokuyo-rd-release/nmea_msgs`], [`ros2`],
+  ),
+  caption: [サブモジュールとして登録されているリポジトリ],
+) <tab-pkg-submodules>
+
+#note[
+  #dist-humble を使う場合、親リポジトリは `release` ブランチを取得します。
+  そのときサブモジュールのブランチ指定も `release` 側の内容になります。
+  上表は本書の #dist-jazzy 側（`jazzy` ブランチ）の登録内容です。
+]
+
+親リポジトリの外で、個別に導入するものが 2 つあります。
+
+#figure(
+  stable(
+    columns: (auto, auto, 1fr),
+    [*名前*], [*取得元*], [*役割*],
+    [`hokuyo_rsf`], [`Hokuyo-aut/hokuyo_rsf`],
+    [RSF-X001 センサのドライバ。点群・IMU・GNSS・LIO を配信する。
+     #tsuyo[これが無いとセンサからデータが取得できません]],
+    [`icart_mini_driver_ros2`], [`hokuyo-rd-release/icart_mini_driver_ros2`],
+    [サンプルのモータドライバ。`yp-spur` に依存します。
+     別のモータドライバを使う場合は不要です（@subsec-setup-userdriver）],
+  ),
+  caption: [親リポジトリ外で導入するもの],
+) <tab-pkg-external-repos>
+
+=== サブモジュールの状態を確認する
+
+#terminal[```bash
+cd ~/colcon_ws/src/hokuyo_navigation2
+git submodule status
+```]
+
+#console(title: "正常な場合の表示")[```
+ a1b2c3d4... fix2xyz_packages_ros2 (heads/main)
+ e5f6a7b8... hokuyo_navigation2 (heads/jazzy)
+ ...
+```]
+
+#warn[
+  行の先頭に `-`（マイナス）が付いているものは、
+  #tsuyo[まだ取得されていません]。次のコマンドで取得してください。
+
+  #terminal[```bash
+git submodule update --init --recursive
+```]
+]
+
+=== どのリポジトリがどの工程で使われるか
+
+#figure(
+  stable(
+    columns: (auto, 1fr),
+    [*工程*], [*主に動くリポジトリ*],
+    [GUI の操作], [`hokuyo_navigation2_gui`、`vizanti`、`rosbridge_suite`],
+    [データ取得], [`hokuyo_rsf`、`vizanti`、`icart_mini_driver_ros2`],
+    [マッピング（p2o）], [`hokuyo_slam_ros2`、`hokuyo_navigation2`、`fix2xyz_packages_ros2`],
+    [マッピング（lio_raw）], [`hokuyo_navigation2`],
+    [2D 地図変換], [`hokuyo_navigation2`],
+    [経路設計], [`hokuyo_navigation2_gui`（Map Viewer）],
+    [自律走行（loc）],
+    [`simple_fastlio_localization_ros2`、`lio_nav2_bringup`、`waypoint_manager`、
+     `jsk_visualization`],
+    [自律走行（gnss）],
+    [`hokuyo_rsf`、`fix2xyz_packages_ros2`、`lio_nav2_bringup`、`waypoint_manager`、
+     `jsk_visualization`],
+  ),
+  caption: [工程ごとに動くリポジトリ],
+) <tab-pkg-by-stage>
+
+#tip[
+  エラーが出た工程が分かれば、
+  この表から#tsuyo[疑うべきリポジトリ]を絞り込めます。
+  たとえば `loc` モードでだけ走行できない場合は、
+  `simple_fastlio_localization_ros2` の周辺が原因である可能性が高くなります。
+]
+
 == hokuyo_navigation2（本体） <subsec-pkg-core>
 
 システム全体の中心となるパッケージです。
@@ -147,12 +245,52 @@ pip3 install flask flask-sockets gevent gevent-websocket websockets pyyaml
   stable(
     columns: (auto, 1fr),
     [*機能*], [*本書での使われ方*],
-    [Bag Recorder], [センサデータを rosbag として記録する（@sec-get-data）],
-    [Teleop Joystick], [ロボットを手動で走らせる（@sec-get-data）],
-    [2D 表示], [地図と経路を平面図として確認する],
+    [Bag Recorder], [センサデータを rosbag として記録する（@subsubsec-vizanti-bag）],
+    [Teleop Joystick], [ロボットを手動で走らせる（@subsubsec-vizanti-teleop）],
+    [Pose Tracker], [走行中の軌跡を表示し、LIO が動いているか確認する],
+    [TF], [座標系の名前と親子関係を確認する（@subsubsec-vizanti-tf）],
+    [Global Settings], [表示の基準フレームを決める（@subsubsec-vizanti-fixedframe）],
   ),
   caption: [本システムで使う Vizanti の機能],
 ) <tab-pkg-vizanti>
+
+Vizanti には、上記のほかにも多数のウィジェットが用意されています。
+@tab-pkg-vizanti-all に、＋ ボタンの「By Type」タブに並ぶものを示します。
+#tsuyo[本システムの運用で必要なのは @tab-pkg-vizanti の 5 つだけ]で、
+その他は追加しても構いませんが、動作の保証対象外です。
+
+#figure(
+  stable(
+    columns: (auto, 1fr),
+    [*ウィジェット*], [*内容*],
+    [Grid], [基準フレームの原点を中心とした方眼],
+    [TF], [座標系（フレーム）の階層],
+    [Robot Model], [ロボットの見た目を表す画像],
+    [Parameter Reconfigure], [ノードのパラメータを表示・編集する],
+    [Bag Recorder], [rosbag を記録する],
+    [Node Manager], [ノードを起動・停止する],
+    [Folder], [ウィジェットをまとめる],
+    [Topic Inspector], [トピックの中身を文字列で表示する],
+    [Teleop Joystick], [`geometry_msgs/Twist` で速度指令を送る],
+    [2D Pose Estimate], [初期位置（`initialpose`）を送る],
+    [2D Nav Goal], [目標位置（`PoseStamped`）を送る],
+    [Waypoint Mission], [経由点の列を送る],
+    [Area Mission], [走行させたい領域を指定する],
+    [Button], [任意のトピックを送るボタンを置く],
+    [Pose Tracker], [`Odometry` の軌跡を矢印で描く],
+    [Point Cloud], [点群を表示する#tsuyo[（本システムの点群には非対応）]。@err-viz-pointcloud],
+    [Laser Scan], [2D の `LaserScan` を表示する],
+    [Map / Grid Cells], [占有格子地図（`OccupancyGrid`）やセル集合を表示する],
+    [Path / Pose / Pose Array], [経路や姿勢を表示する],
+    [Marker Array], [`visualization_msgs` のマーカを表示する],
+    [Satelite Tiles], [`NavSatFix` の位置に衛星写真を重ねる],
+    [Compressed Image], [カメラ画像を表示する],
+    [Attitude Indicator / Speedometer / Altimeter], [IMU・速度・高度の計器表示],
+    [Battery / Temperature / Range], [各種センサの数値表示],
+    [Rosbridge Client], [別の rosbridge サーバへの接続を追加する],
+  ),
+  caption: [Vizanti のウィジェット一覧（「By Type」タブ）],
+) <tab-pkg-vizanti-all>
 
 == rosbridge_suite（ブラウザと ROS の橋渡し） <subsec-pkg-rosbridge>
 
@@ -161,6 +299,14 @@ WebSocket を使って、ブラウザから ROS 2 のトピックを読み書き
 
 / リポジトリ: `hokuyo-rd-release/rosbridge_suite`（ブランチ `humble`）
 / 使用ポート: 9090（TCP）
+
+#warn[
+  #dist-jazzy このパッケージに含まれる `rosapi` ノードは、
+  ROS 2 Jazzy で#tsuyo[起動直後に停止します]。
+  Vizanti のトピック一覧がすべて空になるため、
+  rosbag の記録もジョイスティックの設定もできません。
+  原因と修正方法は @err-vizanti-rosapi を参照してください。
+]
 
 #note[
   Vizanti の端末に

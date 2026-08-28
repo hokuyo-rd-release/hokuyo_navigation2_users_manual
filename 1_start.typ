@@ -24,8 +24,9 @@ RSF の RTK-GNSS の出力と 3D LiDAR による位置を用いて地図作成�
     columns: (auto, 1fr),
     [*こんな方に*], [*読んでいただきたい章*],
     [初めて導入する], [第2章から順に、すべて],
-    [すでに導入済みで、現場で操作する], [第4章〜第10章],
-    [エラーが出て困っている], [第11章（トラブルシューティング）],
+    [すでに導入済みで、現場で操作する], [第4章〜第11章],
+    [エラーが出て困っている], [第12章（トラブルシューティング）],
+    [ファイルの整理・受け渡しをしたい], [第11章],
     [ソフトウェアの中身を知りたい], [第2章、付録A],
   ),
   caption: [読者別の読み進め方],
@@ -40,8 +41,8 @@ RSF の RTK-GNSS の出力と 3D LiDAR による位置を用いて地図作成�
 #v(6pt)
 
 #tip[
-  #tsuyo[エラーが出たときは、まず第11章を開いてください。]\
-  画面や端末に表示された文字を、第11章の見出しから探すのが最短の道です。
+  #tsuyo[エラーが出たときは、まず第12章を開いてください。]\
+  画面や端末に表示された文字を、第12章の見出しから探すのが最短の道です。
   各エラーには `E-101` のような番号が付いており、
   「症状 → 原因 → 対処 → 確認」の順に記載しています。
 ]
@@ -119,15 +120,44 @@ WebSocket Proxy server started at ws://0.0.0.0:5050/ws
 
 #figure(
   stable(
-    columns: (auto, 1fr),
-    [*項目*], [*内容*],
-    [対象ソフトウェアバージョン], [`hokuyo_navigation2` 1.0.0],
-    [OS], [`Ubuntu 22.04 LTS`],
-    [ROS 2 ディストリビューション], [`Humble Hawksbill`],
-    [対応ブラウザ], [Google Chrome、Microsoft Edge など Chromium 系ブラウザを推奨],
+    columns: (auto, 1fr, 1fr),
+    [*項目*], [*構成A（従来）*], [*構成B（本ブランチ）*],
+    [OS], [`Ubuntu 22.04 LTS`], [`Ubuntu 24.04 LTS`],
+    [ROS 2 ディストリビューション], [`Humble Hawksbill`], [`Jazzy Jalisco`],
+    [Python], [3.10], [3.12],
+    [ソースの入手先（ブランチ）], [`release`], [`jazzy`],
+    [対応ブラウザ], table.cell(colspan: 2)[Google Chrome、Microsoft Edge など Chromium 系ブラウザを推奨],
+    [対象ソフトウェアバージョン], table.cell(colspan: 2)[`hokuyo_navigation2` 1.0.0],
   ),
   caption: [動作環境],
 ) <tab-environment>
+
+#warn[
+  本書は#tsuyo[上記の 2 つの構成の両方]を対象としています。
+  手順が異なる箇所には、次のように構成名を明記しています。
+
+  #figure(
+    stable(
+      columns: (auto, 1fr),
+      [*表記*], [*意味*],
+      [#box(inset:(x:4pt,y:1.5pt), radius:2pt, fill: rgb("#00A1E9").lighten(85%),
+            text(font: gothic, size: 8pt, weight: "bold")[Humble])],
+      [`Ubuntu 22.04` + `ROS 2 Humble`（`release` ブランチ）でのみ実行する手順],
+      [#box(inset:(x:4pt,y:1.5pt), radius:2pt, fill: rgb("#1F8A4C").lighten(85%),
+            text(font: gothic, size: 8pt, weight: "bold")[Jazzy])],
+      [`Ubuntu 24.04` + `ROS 2 Jazzy`（`jazzy` ブランチ）でのみ実行する手順],
+      [（表記なし）], [どちらの構成でも共通の手順],
+    ),
+    caption: [構成別手順の表記],
+  ) <tab-distro-badge>
+
+  #tsuyo[自分がどちらの構成かは、次のコマンドで確認できます。]
+
+  #terminal[```bash
+lsb_release -d          # Ubuntu のバージョン
+echo $ROS_DISTRO        # humble または jazzy と表示される
+```]
+]
 
 #note[
   GUI は Web ブラウザ上で動作します。
@@ -151,8 +181,11 @@ WebSocket Proxy server started at ws://0.0.0.0:5050/ws
     [第8章], [経路設計], [経路（waypoint）の編集],
     [第9章], [2D 地図への変換], [Nav2 用 2D 地図の生成],
     [第10章], [自律走行], [単一マップ走行とマルチマップ走行],
-    [第11章], [トラブルシューティング], [エラーの原因と対処],
+    [第11章], [ファイル管理], [ファイルの整理・受け渡しと変換ツール],
+    [第12章], [トラブルシューティング], [エラーの原因と対処],
     [付録A], [パッケージリファレンス], [各リポジトリの詳細],
+    [付録B], [設定・パラメータ早見表], [全パラメータと確認コマンド],
+    [付録C], [用語集], [本書で使う用語の意味],
   ),
   caption: [本書が扱う範囲],
 ) <tab-doc-scope>

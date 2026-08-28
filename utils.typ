@@ -121,6 +121,58 @@
 #let warn(body)   = _callout(body, label: "注意",     accent: c-warn,   icon: "▲")
 #let danger(body) = _callout(body, label: "警告",     accent: c-danger, icon: "■")
 
+// =============================================================
+// ディストリビューション別の手順
+// =============================================================
+// 本書は Ubuntu 22.04 + ROS 2 Humble (構成A) と
+// Ubuntu 24.04 + ROS 2 Jazzy (構成B) の両方を対象とする。
+// 手順が分かれる箇所は、次の囲み／バッジで区別する。
+
+#let c-humble = rgb("#00A1E9")   // 構成A: Humble
+#let c-jazzy  = rgb("#1F8A4C")   // 構成B: Jazzy
+
+// インラインのバッジ   例: #dist-humble 側のみ実行します
+#let _badge(label, accent) = box(
+  inset: (x: 4pt, y: 1.5pt),
+  outset: (y: 2pt),
+  radius: 2pt,
+  fill: accent.lighten(85%),
+  stroke: 0.5pt + accent.lighten(40%),
+  text(font: gothic, size: 8pt, weight: "bold", fill: accent.darken(25%), label),
+)
+#let dist-humble = _badge("Humble", c-humble)
+#let dist-jazzy  = _badge("Jazzy", c-jazzy)
+#let dist-both   = _badge("共通", luma(110))
+
+// ブロック: そのディストリビューションでのみ行う手順をまとめる
+#let _distblock(body, label: "", accent: black, note: none) = block(
+  width: 100%,
+  inset: (left: 9pt, right: 9pt, top: 7pt, bottom: 7pt),
+  radius: 2pt,
+  fill: accent.lighten(95%),
+  stroke: (left: 2.5pt + accent),
+  breakable: true,
+  {
+    text(font: gothic, weight: "bold", size: 9pt, fill: accent.darken(15%))[#label]
+    if note != none {
+      text(font: gothic, size: 8.5pt, fill: accent.darken(5%))[ — #note]
+    }
+    v(3pt, weak: true)
+    set text(size: 9.5pt)
+    set par(first-line-indent: 0em)
+    body
+  },
+)
+
+#let humble(body) = _distblock(
+  body, label: "構成A: Ubuntu 22.04 / ROS 2 Humble",
+  accent: c-humble, note: [`release` ブランチ],
+)
+#let jazzy(body) = _distblock(
+  body, label: "構成B: Ubuntu 24.04 / ROS 2 Jazzy",
+  accent: c-jazzy, note: [`jazzy` ブランチ],
+)
+
 // 用語や前提知識のいらない読者向けのやさしい言い換え
 #let plain(body) = _callout(body, label: "かんたんに言うと", accent: luma(90), icon: "→")
 
@@ -195,10 +247,12 @@
     {
       set align(left)
       // ヘッダ
+      // sticky: true — 見出しだけが前のページの末尾に取り残されるのを防ぐ。
       block(
         width: 100%,
         fill: accent.lighten(88%),
         inset: (x: 9pt, y: 6pt),
+        sticky: true,
         grid(
           columns: (auto, 1fr),
           gutter: 7pt,
@@ -336,3 +390,76 @@
     },
   ),
 )
+
+// =============================================================
+// コンフィグのパラメータ表
+// =============================================================
+// パラメータがどの処理で使われるかを示すバッジ。
+// 表の中で色分けすることで、「自分に関係する行」を目で拾えるようにする。
+#let c-p2o    = rgb("#0B6BCB")   // p2o (グラフSLAM)
+#let c-lioraw = rgb("#1F8A4C")   // lio_raw (LIO そのまま)
+#let c-2d     = rgb("#8E44AD")   // 3D→2D 変換
+#let c-gnss   = rgb("#B7791F")   // GNSS 補正
+
+#let _tag(label, accent) = box(
+  inset: (x: 3.5pt, y: 1pt),
+  outset: (y: 1.5pt),
+  radius: 2pt,
+  fill: accent.lighten(85%),
+  stroke: 0.5pt + accent.lighten(35%),
+  text(font: gothic, size: 7pt, weight: "bold", fill: accent.darken(20%), label),
+)
+#let tag-p2o    = _tag("p2o", c-p2o)
+#let tag-lioraw = _tag("lio_raw", c-lioraw)
+#let tag-2d     = _tag("2D化", c-2d)
+#let tag-gnss   = _tag("GNSS", c-gnss)
+#let tag-none   = _tag("未使用", luma(120))
+
+// パラメータ表。行番号を左端に置き、CSV の並び順そのものを一覧にする。
+// 列: 行 / パラメータ名 / 出荷時の値 / 使う処理 / 意味
+#let paramtable(..cells) = table(
+  columns: (16pt, auto, auto, auto, 1fr),
+  inset: (x: 5pt, y: 5pt),
+  align: (center + horizon, left + horizon, left + horizon, left + horizon, left + top),
+  fill: (x, y) => if y == 0 { c-brand.lighten(90%) } else if calc.odd(y) { luma(248) } else { none },
+  stroke: (x, y) => if y == 0 { (bottom: 1.2pt + c-brand) } else { (bottom: 0.3pt + luma(210)) },
+  table.header(
+    text(font: gothic, weight: "bold", size: 8pt)[*行*],
+    text(font: gothic, weight: "bold", size: 8pt)[*パラメータ*],
+    text(font: gothic, weight: "bold", size: 8pt)[*出荷時*],
+    text(font: gothic, weight: "bold", size: 8pt)[*使う処理*],
+    text(font: gothic, weight: "bold", size: 8pt)[*意味・目安*],
+  ),
+  ..cells
+)
+
+// 表の中に見出し行を挟む (分類の区切り)
+#let paramgroup(title) = table.cell(
+  colspan: 5,
+  fill: luma(232),
+  inset: (x: 5pt, y: 4pt),
+  text(font: gothic, weight: "bold", size: 8.5pt, fill: c-ink, title),
+)
+
+// 画面の要素に振った番号を示す丸バッジ (図の凡例と本文をつなぐ)
+#let num(n, accent: c-brand) = box(
+  baseline: 2.5pt,
+  circle(
+    radius: 6pt, fill: accent, stroke: 1pt + white,
+    align(center + horizon, text(font: gothic, size: 7.5pt, weight: "bold", fill: white, str(n))),
+  ),
+)
+
+// 図の上に番号バッジを重ねるための補助。
+// #overlay(image(...), (num, x, y), ...) の形で使う。x/y は図の幅・高さに対する割合。
+#let overlay(body, ..marks) = box({
+  body
+  for m in marks.pos() {
+    place(
+      top + left,
+      dx: m.at(1) * 100% - 6pt,
+      dy: m.at(2) * 100% - 6pt,
+      num(m.at(0)),
+    )
+  }
+})

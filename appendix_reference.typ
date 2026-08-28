@@ -29,8 +29,9 @@
     [2], [`pointcloud_topic`], [`/hokuyo3d/hokuyo_cloud2`],
     [点群のトピック名（p2o、lio_raw）],
 
-    [3], [`lio_topic`], [`/rsf/lio_lidar_rate_odom`],
-    [LIO のトピック名（p2o、lio_raw）],
+    [3], [`lio_topic`], [`/rsf/lio_imu_rate_odom`],
+    [LIO のトピック名（p2o、lio_raw）。
+     `/rsf/lio_lidar_rate_odom` も選べる（@tab-lio-topics）],
 
     [4], [`run_lio`], [`true`],
     [本パッケージでは使用しません（拡張用）],
@@ -47,7 +48,8 @@
      それ以外の文字列なら GNSS 補正モード（p2o）],
 
     [8], [`pc_save_distance`], [`1.0`],
-    [点群を地図に足し込む間隔 [m]。小さいほど密で重い地図になる],
+    [点群を地図へ足し込む間隔 [m]。p2o と lio_raw で同じ意味。
+     小さいほど密で重い地図になる。`0` で間引きなし（@tab-pcsave-density）],
 
     [9], [`wp_save_distance`], [`4.0`],
     [経路点を置く間隔 [m]],
@@ -119,6 +121,8 @@
     [2D 地図を細かくしたい], [`map_resolution`], [下げる],
     [3D 地図が粗い], [`pc_save_distance`], [下げる],
     [3D 地図が重すぎる], [`pc_save_distance`], [上げる],
+    [間引かずにすべての点群を使いたい], [`pc_save_distance`], [`0` にする],
+    [地図が空・完了だけ出る（lio_raw）], [`orig_frame` / `target_frame`], [センサ設定に合わせる],
     [経路点が多すぎる], [`wp_save_distance`], [上げる],
     [fix 率が低いと警告が出る], [`gnss_cov_thre`], [上げる],
     [GNSS 補正を使いたくない], [`slam_mode`], [`gravity` にする],
@@ -150,6 +154,94 @@ map_file,waypoint_file,nav_type,interval
   カンマの前後に半角スペースを入れないでください。
   また、`nav_type` に `loc` `gnss` 以外を書くと
   「警告: 不明なナビゲーションタイプです」と表示され、`loc` として扱われます。
+]
+
+== 走行オプションファイル（wizurg_opts） <subsec-ref-wizurg>
+
+自律走行とデータ取得のときに「どのプログラムを起動するか」を決めるファイルです。
+#path[config/wizurg_opts/] に置かれており、
+起動スクリプトが自動的に読み込みます。
+
+#figure(
+  stable(
+    columns: (auto, 1fr),
+    [*ファイル*], [*使われる場面*],
+    [`nav_opt_lio.csv`], [単一マップ走行（@subsec-nav-single）],
+    [`plural_opt_lio.csv`], [マルチマップ走行（@subsec-nav-multi）],
+    [`sensor_rosbag_lio.csv`], [データ取得（@sec-get-data）],
+  ),
+  caption: [走行オプションファイルの種類],
+) <tab-ref-wizurg-opts>
+
+#danger[
+  このファイルも#tsuyo[行の順序で読み取られます]。
+  1 行目は見出しで、2 行目以降が上から順に対応します。
+  行を入れ替えたり削除したりすると、
+  まったく別の設定として解釈されます（@err-csv-order と同じ仕組みです）。
+]
+
+#figure(
+  stable(
+    columns: (auto, auto, 1fr),
+    [*行*], [*項目*], [*意味*],
+    [2], [`use_joy_controller`], [物理ジョイスティックを使うか],
+    [3], [`use_mapping`], [走行と同時に地図を作るか（通常 `false`）],
+    [4], [`use_navigation`], [Nav2 を起動するか。自律走行では `true`],
+    [5], [`use_sensors`], [RSF センサのノードを起動するか],
+    [6], [`use_icart_driver`], [サンプルのモータドライバを起動するか],
+    [7], [`use_lio`], [LIO（LiDAR 慣性オドメトリ）を使うか],
+    [8], [`use_unity_sim`], [シミュレータと接続するか（通常 `false`）],
+    [9], [`use_motor_driver`], [モータドライバを起動するか。\
+                               #tsuyo[台上で動作確認するときは `false`]],
+    [10], [`use_multi_maps`], [マルチマップ走行の既定値],
+    [11], [`map_file_name`], [GUI で地図を選ばなかったときの既定の地図名],
+    [12], [`waypoint_file_name`], [同じく既定の経路名],
+    [13], [`rosbag_record`], [走行中に rosbag を記録するか],
+    [14], [`rosbag_dir`], [その記録先],
+    [15], [`make_waypoints`], [経路作成ツールを起動するか],
+    [16], [`edit_waypoints`], [経路編集ツールを起動するか],
+  ),
+  caption: [`nav_opt_lio.csv` の各行],
+) <tab-ref-navopt>
+
+#tip[
+  #tsuyo[ロボットを走らせずに画面だけ確認したいとき]は、
+  `use_motor_driver` と `use_icart_driver` を `false` にしてください。
+  Nav2 と RViz2 は起動しますが、車輪は回りません。
+  経路や地図の確認、動作の練習に使えます。
+]
+
+== 構成A（Humble）と構成B（Jazzy）の違い <subsec-ref-distro-diff>
+
+同じ作業でもコマンドが異なる箇所の一覧です。
+セットアップ手順は @sec-setup を参照してください。
+
+#figure(
+  stable(
+    columns: (auto, 1fr, 1fr),
+    [*項目*], [*構成A（Humble）*], [*構成B（Jazzy）*],
+    [OS], [Ubuntu 22.04 LTS], [Ubuntu 24.04 LTS],
+    [Python], [3.10], [3.12],
+    [ブランチ], [`release`], [`jazzy`],
+    [ROS 2 本体], [`ros-humble-desktop-full`], [`ros-jazzy-desktop`],
+    [環境の読み込み], [`source /opt/ros/humble/setup.bash`],
+      [`source /opt/ros/jazzy/setup.bash`],
+    [apt パッケージ名], [`ros-humble-<名前>`], [`ros-jazzy-<名前>`],
+    [`pip3` の実行], [`pip3 install -r requirements.txt`],
+      [`pip3 install --user --break-system-packages -r requirements.txt`],
+    [PROJ], [apt の `libproj-dev`], [9.4.1 をソースからビルド],
+    [PCL], [apt の `libpcl-dev`], [1.14.1 を `/opt/pcl` へビルド],
+    [追加の環境変数], [不要], [`CMAKE_PREFIX_PATH` に `/opt/pcl` を追加],
+    [Gazebo], [`desktop-full` に同梱], [同梱されない（本ソフトウェアでは未使用）],
+  ),
+  caption: [構成A と 構成B の差分],
+) <tab-ref-distro-diff>
+
+#warn[
+  #dist-jazzy では、Nav2 の設定ファイル #path[config/nav2/] の記述が
+  #tsuyo[整数と小数まで含めて]正しくないと、該当するプログラムが起動直後に終了します。
+  たとえば `local_costmap` の `width` / `height` は#tsuyo[整数]で書く必要があります。
+  起動しない場合の調べ方は @err-nav2-timeout を参照してください。
 ]
 
 == 使用ポート一覧 <subsec-ref-ports>
@@ -215,7 +307,8 @@ sudo ufw status
     [そのトピックの流れる速さ], [`ros2 topic hz <トピック名>`],
     [そのトピックの中身を 1 件], [`ros2 topic echo <トピック名> --once`],
     [座標系のつながり（図）], [`ros2 run rqt_tf_tree rqt_tf_tree`],
-    [rosbag の中身], [`ros2 bag info <rosbagフォルダ>`],
+    [rosbag の中身（トピック名と件数）], [`ros2 bag info <rosbagフォルダ>`],
+    [センサのフレーム名], [`grep -e odom_frame -e lidr_frame config/rsf_node_config.yaml`],
     [自分のパソコンの IP アドレス], [`hostname -I`],
     [RSF に通信が届くか], [`ping 192.168.0.100`],
     [ディスクの空き容量], [`df -h ~`],
@@ -230,9 +323,12 @@ sudo ufw status
   読み込んでいないと「コマンドが見つかりません」と表示されます。
 
   #terminal[```bash
-source /opt/ros/humble/setup.bash
+source /opt/ros/$ROS_DISTRO/setup.bash
 source ~/colcon_ws/install/setup.bash
 ```]
+
+  `$ROS_DISTRO` の部分は自動的に `humble` または `jazzy` に置き換わります。
+  何も表示されない場合は、そもそも ROS 2 が読み込まれていません（@err-ros-notfound）。
 ]
 
 == 生成されるファイルの一覧 <subsec-ref-files>

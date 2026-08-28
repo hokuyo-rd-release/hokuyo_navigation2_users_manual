@@ -97,9 +97,19 @@
 `hokuyo_navigation2` は、複数のリポジトリを Git の #tsuyo[サブモジュール] としてまとめた構造になっています。
 親リポジトリを `--recursive` 付きでクローンすると、@tab-repos の子リポジトリが同時に取得されます。
 
-#terminal[```bash
+#humble[
+  #terminal[```bash
 git clone --recursive https://github.com/Hokuyo-aut/hokuyo_navigation2.git
 ```]
+]
+#jazzy[
+  #terminal[```bash
+git clone --recursive -b jazzy https://github.com/Hokuyo-aut/hokuyo_navigation2.git
+```]
+]
+
+各リポジトリの正確な取得元とブランチは @tab-pkg-submodules に、
+工程ごとにどのリポジトリが動くかは @tab-pkg-by-stage にまとめています。
 
 #figure(
   stable(
@@ -276,8 +286,10 @@ ros2 run rqt_tf_tree rqt_tf_tree
     [`/hokuyo3d/imu`], [`sensor_msgs/Imu`], [RSF の IMU],
     [`/fix`], [`sensor_msgs/NavSatFix`], [GNSS の緯度・経度・高度と精度（共分散）],
     [`/gga`], [`nmea_msgs/Gpgga`], [GNSS の NMEA 文],
-    [`/rsf/lio_lidar_rate_odom`], [`nav_msgs/Odometry`], [LIO の位置（LiDAR 周期）],
-    [`/rsf/lio_imu_rate_odom`], [`nav_msgs/Odometry`], [LIO の位置（IMU 周期）],
+    [`/rsf/lio_lidar_rate_odom`], [`nav_msgs/Odometry`],
+    [LIO の位置（LiDAR 周期）。地図作成に選べる（@tab-lio-topics）],
+    [`/rsf/lio_imu_rate_odom`], [`nav_msgs/Odometry`],
+    [LIO の位置（IMU 周期）。#tsuyo[地図作成の既定]、自律走行でも使用],
     [`/rsf/rsf_odom_type`], [`std_msgs/String`], [いま GNSS と LIO のどちらを使っているか],
     [`/estimated_pose`], [`geometry_msgs/PoseStamped`], [地図上での推定位置],
     [`/map_cloud`], [`sensor_msgs/PointCloud2`], [読み込まれた 3D 点群地図],
@@ -329,6 +341,11 @@ GUI から作成・選択するファイルは、すべて本体パッケージ�
   #tsuyo[実際に作った地図・経路そのもの]です。
   GUI の「ファイル管理」から削除すると元に戻せません。
   現場で使っている地図は、定期的に別の場所へコピーして保管してください。
+  控えの取り方は @subsec-files-backup を参照してください。
+]
+
+#note[
+  これらのファイルをブラウザから整理・受け渡しする方法は @sec-files で説明します。
 ]
 
 #pagebreak()

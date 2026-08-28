@@ -75,6 +75,127 @@ p2oに関しては、さらに3つのサブモードがあり、GNSSの受信状
 
 + 実行完了後、@sub28 のターミナルと、@sub29 のブラウザタブは閉じて下さい。
 
+=== 正常に終わったかの見分け方 <subsubsec-mapping-success>
+
+マッピングは#tsuyo[失敗しても端末が赤くならない]ことがあります。
+「終わったように見えて、実は地図が空」という状態を避けるため、
+次の 3 点で必ず確認してください。
+
+#fstep(1, [端末の最後の行を読む], [
+  #tsuyo[完了フラグの作成メッセージが出ていれば、処理は最後まで進んでいます。]
+
+  #console(title: "p2o が正常に完了したときの端末（実行例）")[```
+run_p2o
+step 1: res=0.239873, convergence_score=0.614554 time=0.001492s
+step 2: res=2.28576, convergence_score=0.706754 time=0.004373s
+（中略：数百行の step が流れます）
+step 300: res=0.172192, convergence_score=0.881252 time=0.00087s
+data/kato_support/output.p2o: 0.407209s
+Processing topic (mcap): /hokuyo3d/hokuyo_cloud2
+Saved 112 point cloud files (mcap).
+  PointCloud Distance Filter: 1 m
+  Waypoint Distance Filter: 4 m
+結合した点群: 14 枚 / 112 枚中 (合計 38196 点)
+PCDファイルを保存しました: kato_support_Acord.pcd
+Waypointファイルを保存しました: .../waypoints/kato_support.json
+点群の平行移動を開始します。
+点群の平行移動を終了しました。
+P2O SLAM completion flag created: .../map/kato_support.P2O_DONE
+```]
+
+  #console(title: "lio_raw が正常に完了したときの端末（実行例）")[```
+LIO-RAW処理とPCDファイル抽出を開始します... (入力Bag: 2026-08-07-14-27-kato-support, 出力PCD: kato_support.pcd)
+Config: PCD=/hokuyo3d/hokuyo_cloud2, ODOM=/rsf/lio_imu_rate_odom, TF=/dummy_tf
+Config: Frames=yvt -> lio_odom
+Found MCAP file: .../rosbag/2026-08-07-14-27-kato-support/..._0.mcap
+Starting data processing...
+  [Index 00000] Waypoint added at (-0.06, -0.01). Total: 1
+  [Index 00255] Waypoint added at (3.97, -0.14). Total: 2
+  [Index 00362] Waypoint added at (8.13, -0.12). Total: 3
+
+--- Processing Finished ---
+Total points saved: 30021 points.
+✅ Saved map successfully to .../map/kato_support.pcd (Binary/Compressed format)
+✅ Waypoints saved successfully to .../waypoints/kato_support.json
+   Total waypoints: 3
+Building package hokuyo_navigation2 to include new map files...
+Summary: 1 package finished [0.59s]
+LIO-RAW処理とPCDファイル抽出が完了しました。
+```]
+
+  #tsuyo[点の数と経路点の数を必ず見てください。]
+  p2o では `結合した点群: N 枚 / M 枚中 (合計 ... 点)`、
+  lio_raw では `Total points saved:` と `Total waypoints:` が該当します。
+  #tsuyo[`0 枚` や `0 点` になっていれば、地図として使えません。]
+
+  点の数は `pc_save_distance` の設定で変わります。
+  少なすぎると感じたら値を小さくしてください（@tab-pcsave-density）。
+])
+
+#fstep(2, [ファイルの大きさを確認する], [
+  #terminal[```bash
+ls -lh ~/colcon_ws/src/hokuyo_navigation2/hokuyo_navigation2/map/<地図名>.pcd
+```]
+
+  #tsuyo[数百 KB 未満のときは、ほぼ空の地図です。]
+  数十メートル走った rosbag なら、通常は 1 MB 以上になります。
+])
+
+#fstep(3, [3D Viewer で目視する], [
+  地図を読み込んで、走った経路の形になっているかを確認します。
+  点がまばらだったり、同じ場所が二重にずれて写っていたりする場合は
+  作り直しが必要です（@subsec-mapping-choose）。
+])
+
+#danger[
+  #tsuyo[「完了しました」と表示されても、地図が空のことがあります。]
+
+  たとえば、コンフィグで指定した `lio_topic` が rosbag に含まれていない場合、
+  端末には次のように #tsuyo[途中に 1 行だけエラーが出た後、
+  「完了しました」まで進んでしまいます]。
+
+  #console(title: "見落としやすい失敗の例（lio_raw）")[```
+Reading topics: ['/hokuyo3d/hokuyo_cloud2', '/rsf/lio_imu_rate_odom'] from bag...
+Error: Odometry data not found. Cannot generate waypoints.
+Building package hokuyo_navigation2 to include new map files...
+Summary: 1 package finished [0.40s]
+LIO-RAW処理とPCDファイル抽出が完了しました。
+Creating completion flag file at: .../map/<地図名>.LIO_RAW_DONE
+```]
+
+  この場合、`.pcd` は作られません。
+  対処は @err-lioraw-silent を参照してください。\
+  #tsuyo[端末は最後の行だけでなく、上へさかのぼって
+  `Error` の文字が無いか確認してください。]
+
+  設定の誤りごとに何が起きるかは @tab-mapping-misconfig に、
+  「コアダンプ」と表示されて強制終了する条件は @tab-mapping-coredump に
+  一覧をまとめています。
+]
+
+#warn[
+  #tsuyo[`Config:` から始まる行は必ず読んでください。]
+  ここに表示されるトピック名とフレーム名が実際のデータと合っていないと、
+  エラーが出ないまま空の地図ができます。
+  確認方法は @subsubsec-config-checktopic と @subsubsec-config-checkframe を参照してください。
+]
+
+#tip[
+  rosbag にどのトピックが入っているかは、次のコマンドで確認できます。
+  コンフィグの `pointcloud_topic` と `lio_topic` が
+  #tsuyo[`Count:` が 0 でない行]に含まれている必要があります。
+
+  #terminal[```bash
+ros2 bag info ~/colcon_ws/src/hokuyo_navigation2/hokuyo_navigation2/rosbag/<rosbag名>
+```]
+
+  #console(title: "確認の表示例")[```
+Topic information: Topic: /fix | Type: sensor_msgs/msg/NavSatFix | Count: 28 | ...
+                   Topic: /hokuyo3d/hokuyo_cloud2 | Type: sensor_msgs/msg/PointCloud2 | Count: 537 | ...
+                   Topic: /rsf/lio_lidar_rate_odom | Type: nav_msgs/msg/Odometry | Count: 536 | ...
+```]
+]
+
 === p2o 地図の説明
 p2o により作成された3D地図は、UTM座標系を基準座標が原点 `origin` となるように並行移動したものです。
 基準座標とは、その計測エリアの基準となる中心点のことで、この中心点からの相対的なメートル差分として扱われます。
@@ -151,14 +272,44 @@ Fix率が低いため、Z軸拘束(擬似観測)を追加してSLAMを続行し�
   対処方法は @err-fix-rate を参照してください。
 ]
 
-#capture-todo(
-  "C-15",
-  [`gnss_log/` に出力された CSV を開いた画面。fix 率の見方の説明に使用],
-  height: 36mm,
-)
-#v(3pt)
-#text(size: 8.5pt)[
-  ※ 撮影待ちです。撮影依頼の詳細は @tab-capture-p3 を参照してください。
+=== CSV の中身の読み方 <subsubsec-gnsslog-read>
+
+出力される CSV は、#tsuyo[先頭 4 行に要約]が、5 行目以降に個々の測定値が並ぶ形式です。
+表計算ソフトで開くほか、端末でも確認できます。
+
+#terminal[```bash
+cd ~/colcon_ws/src/hokuyo_navigation2/hokuyo_navigation2/gnss_log
+head -4 <地図名>_gnss_cov_0.01.csv
+```]
+
+#console(title: "GNSS 品質ログの先頭 4 行（実行例）")[```
+北方向のfix率[%],東方向のfix率[%],鉛直方向のfix率[%]
+92.8571428571,92.8571428571,0.0000000000
+北方向のばらつきの平均[m],東方向のばらつきの平均[m],鉛直方向のばらつきの平均[m]
+0.0061515357,0.0061515357,0.0984245714
+```]
+
+#figure(
+  stable(
+    columns: (auto, 1fr),
+    [*行*], [*意味*],
+    [1〜2 行目],
+    [#tsuyo[fix 率]。`gnss_cov_thre` 以下の精度だった測定の割合［%］。
+     このうち#tsuyo[いちばん左（北方向）の値]がコンフィグの `fix_rate` と比較されます],
+    [3〜4 行目],
+    [ばらつきの平均［m］。値が小さいほど精度が高いことを表します],
+    [5 行目以降],
+    [1 回ごとの測定のばらつき。細かく調べたいときに使います],
+  ),
+  caption: [GNSS 品質ログの構成],
+) <tab-gnsslog-format>
+
+#note[
+  上の例では北方向の fix 率が `92.86%` で、
+  コンフィグの `fix_rate`（既定 `30`）を上回っているため、
+  #tsuyo[GNSS を使った補正で地図が作られます]。
+  鉛直方向の fix 率が `0.00%` になっていますが、
+  判定に使われるのは北方向の値のみのため問題ありません。
 ]
 
 == うまくいかないときは <subsec-mapping-trouble>
@@ -173,6 +324,12 @@ Fix率が低いため、Z軸拘束(擬似観測)を追加してSLAMを続行し�
   stable(
     columns: (1fr, auto),
     [*症状*], [*参照先*],
+    [`エラー: ... に数値として読めない値が指定されました` と出る], [@err-savedist-nan],
+    [`Segmentation fault (core dumped)` と出て終了する], [@err-runp2o-segv],
+    [`Topic '...' not found in bag file.` と出る], [@err-topic-pc],
+    [`can't open file: data/<地図名>/center_utm.txt` と出る], [@err-topic-lio],
+    [`Error (ROS 2): Topic '...' not found` と出て処理が始まらない], [@err-topic-gnss],
+    [`No point clouds were saved ...` だけ出て地図ができない], [@err-frame-mismatch],
     [「'run_p2o' 実行ファイルが見つかりませんでした」と出る], [@err-no-runp2o],
     [「Path ... does not exist」と出て終了する], [@err-bag-notfound],
     [端末がすぐ閉じる／何も表示されない], [@err-mapping-nostart],

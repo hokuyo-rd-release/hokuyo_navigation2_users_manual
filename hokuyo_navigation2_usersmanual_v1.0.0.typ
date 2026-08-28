@@ -205,6 +205,7 @@
 #include "7_waypoint.typ"
 #include "8_2D_map.typ"
 #include "9_navigation.typ"
+#include "11_files.typ"
 #include "10_troubleshooting.typ"
 
 // --- 付録 ---

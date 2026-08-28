@@ -41,11 +41,19 @@
     [地図が作れない、地図の形がおかしい], [@subsec-err-mapping],
     [2D 地図が真っ白・真っ黒になる], [@subsec-err-pcd2pgm],
     [自律走行が始まらない、途中で止まる、変な方向へ行く], [@subsec-err-nav],
+    [ファイルの整理・受け渡しがうまくいかない], [@subsec-err-gui],
     [ビルドやインストールが通らない], [@subsec-err-build],
-    [端末に出た英語のメッセージから探したい], [@subsec-msg-index],
+    [端末やブラウザに出たメッセージから探したい], [@subsec-msg-index],
   ),
   caption: [症状から探す索引],
 ) <tab-trouble-index>
+
+#tip[
+  #tsuyo[表示された文言そのもので探すのがいちばん確実です。]
+  @subsec-msg-index に、端末とブラウザに出るメッセージの
+  #tsuyo[逆引き表]をまとめています。
+  文言の一部（可変部分を除いた部分）で探してください。
+]
 
 == まず試す 3 つのこと <subsec-trouble-first>
 
@@ -148,8 +156,9 @@ cd ~/colcon_ws/src/hokuyo_navigation2/hokuyo_navigation2/scripts
   id: "E-103",
   level: "warn",
   symptom: [
-    Vizanti の画面は開くが、何も表示されない。
-    または、トピックの一覧が空で選べない。
+    Vizanti の画面は開くが、#tsuyo[グリッドも座標軸も含めて何も表示されない]。\
+    （画面そのものは表示されていて、トピックの一覧だけが空という場合は
+    @err-vizanti-rosapi です。）
   ],
   shown: [
     サーバの端末に次のような表示が出ることがあります。
@@ -180,7 +189,7 @@ sudo ufw allow 9090/tcp
 ```]
   ],
   verify: [
-    Vizanti の画面でトピックの一覧が表示され、選択できるようになること。
+    Vizanti の画面にグリッドと座標軸が表示されること。
   ],
 ) <err-vizanti>
 
@@ -193,8 +202,86 @@ sudo ufw allow 9090/tcp
 ]
 
 #errorcard(
-  [ボタンが灰色で押せない],
+  [Vizanti の画面は出るが、トピックの一覧がどこも空になる],
   id: "E-104",
+  level: "danger",
+  symptom: [
+    Vizanti は開き、グリッドや座標軸は表示される。
+    しかし、次のようにトピックを選ぶ欄が#tsuyo[すべて空]で、何も選べない。
+    - Bag Recorder の「Topics：」に何も出てこない
+    - Joystick Teleop の「Topic：」が空で、速度トピックを選べない
+    - Add Widgets の #tsuyo[By Topic] タブに何も並ばない
+  ],
+  shown: [
+    Vizanti を起動した端末に、次のような表示が出ています。
+    #console(title: "Vizanti を起動した端末")[```
+[rosapi_node-2] Traceback (most recent call last):
+[rosapi_node-2]   File ".../rosapi/lib/rosapi/rosapi_node", line 44, in <module>
+[rosapi_node-2]     from rosapi import glob_helper, objectutils, params, proxy
+[rosapi_node-2]   File ".../rosapi/params.py", line 43, in <module>
+[rosapi_node-2]     from ros2param.api import call_get_parameters, call_set_parameters, get_parameter_value
+[rosapi_node-2] ImportError: cannot import name 'get_parameter_value' from 'ros2param.api'
+[ERROR] [rosapi_node-2]: process has died [pid ..., exit code 1, ...]
+```]
+  ],
+  cause: [
+    Vizanti にトピックの一覧を教える `rosapi` というノードが、
+    起動直後に停止しています。\
+    #dist-jazzy #tsuyo[ROS 2 Jazzy で起こります。]
+    Jazzy では `get_parameter_value` という関数の置き場所が
+    `ros2param.api` から `rclpy.parameter` に移動しましたが、
+    `rosbridge_suite` 側が古い置き場所を参照しているためです。\
+    トピックの一覧が取れないだけで、Vizanti の表示自体は動くため、
+    #tsuyo[「画面は出ているのに選べない」という分かりにくい症状]になります。
+  ],
+  fix: [
+    + 次のコマンドで、`rosapi` が動いているかを確認します。
+      応答が返らない（数十秒待っても止まったまま）なら、この症状です。
+
+      #terminal[```bash
+ros2 service call /rosapi/topics_for_type \
+  rosapi_msgs/srv/TopicsForType "{type: 'sensor_msgs/msg/PointCloud2'}"
+```]
+    + #path[rosbridge_suite/rosapi/src/rosapi/params.py] の 43 行目付近を、
+      次のように書き換えます。
+
+      #terminal[```python
+# 変更前
+from ros2param.api import call_get_parameters, call_set_parameters, get_parameter_value
+
+# 変更後
+from ros2param.api import call_get_parameters, call_set_parameters
+try:
+    from ros2param.api import get_parameter_value
+except ImportError:  # ROS 2 Jazzy 以降は rclpy.parameter に移動した
+    from rclpy.parameter import get_parameter_value
+```]
+    + ビルドし直し、サーバを起動し直します。
+
+      #terminal[```bash
+cd ~/colcon_ws
+colcon build --packages-select rosapi
+source install/setup.bash
+cd ~/colcon_ws/src/hokuyo_navigation2/hokuyo_navigation2/scripts
+./stop_server.sh && ./start_server.sh
+```]
+  ],
+  verify: [
+    上のコマンドが、次のようにトピック名を返すこと。
+
+    #console(title: "直ったときの表示")[```
+response:
+rosapi_msgs.srv.TopicsForType_Response(topics=['/hokuyo3d/hokuyo_cloud2'])
+```]
+
+    Vizanti を開き直し、Bag Recorder の「Topics：」に
+    トピックが並ぶようになれば復旧しています。
+  ],
+) <err-vizanti-rosapi>
+
+#errorcard(
+  [ボタンが灰色で押せない],
+  id: "E-105",
   level: "info",
   symptom: [
     #btn[データ取得] #btn[マッピング] #btn[自律走行] #btn[ファイル管理]
@@ -214,7 +301,7 @@ sudo ufw allow 9090/tcp
 
 #errorcard(
   [「セキュリティ上の理由により、このディレクトリにはアクセスできません。」],
-  id: "E-105",
+  id: "E-106",
   level: "info",
   symptom: [ファイル選択の画面で、赤い帯に上記のメッセージが表示される。],
   cause: [
@@ -231,7 +318,7 @@ sudo ufw allow 9090/tcp
 
 #errorcard(
   [ファイル名を変更できない],
-  id: "E-106",
+  id: "E-107",
   level: "info",
   symptom: [
     ファイル管理でファイル名をダブルクリックして変更しようとすると、
@@ -272,7 +359,7 @@ sudo ufw allow 9090/tcp
 
 #errorcard(
   [Map Viewer に地図や経路が表示されない],
-  id: "E-107",
+  id: "E-108",
   level: "warn",
   symptom: [
     Map Viewer でファイルを選んで #btn[選択した要素をロード] を押しても、
@@ -313,6 +400,328 @@ python3 -m json.tool ~/colcon_ws/src/hokuyo_navigation2/hokuyo_navigation2/waypo
   ],
 ) <err-viewer-noload>
 
+#errorcard(
+  [「ディレクトリが見つかりません: ...」],
+  id: "E-109",
+  level: "warn",
+  symptom: [
+    ファイル管理や rosbag の選択画面を開いたとき、
+    ブラウザ上部に赤い帯でこのメッセージが表示され、一覧が空になる。
+  ],
+  shown: [
+    #console(title: "ブラウザ上部の表示")[```
+ディレクトリが見つかりません: /home/<ユーザ名>/colcon_ws/src/hokuyo_navigation2/hokuyo_navigation2/rosbag
+```]
+  ],
+  cause: [
+    表示しようとしたフォルダ自体がありません。
+    セットアップ時に #path[map/]、#path[rosbag/]、#path[waypoints/] を
+    作り忘れた場合に起こります。
+  ],
+  fix: [
+    + 不足しているフォルダを作ります。
+
+      #terminal[```bash
+cd ~/colcon_ws/src/hokuyo_navigation2/hokuyo_navigation2
+mkdir -p map rosbag waypoints data gnss_log config
+```]
+    + ブラウザのページを再読み込みします。
+  ],
+  verify: [ファイル一覧の画面が正常に開くこと。],
+) <err-dir-notfound>
+
+#errorcard(
+  [「ファイルまたはディレクトリが選択されていません。」],
+  id: "E-110",
+  level: "info",
+  symptom: [
+    #btn[選択] や #btn[削除] を押したときに、赤い帯でこのメッセージが出て先に進まない。
+  ],
+  shown: [
+    #console(title: "ブラウザ上部の表示")[```
+ファイルまたはディレクトリが選択されていません。
+削除するアイテムが選択されていません。
+PCDファイルが選択されていません。
+```]
+  ],
+  cause: [
+    #tsuyo[行の左端にあるチェックボックスにチェックが入っていません。]
+    ファイル名の文字をクリックしただけでは選択したことになりません。
+  ],
+  fix: [
+    + 一覧に戻り、対象の行の#tsuyo[左端の四角（チェックボックス）]をクリックします。
+    + チェックが入ったことを確認してから、もう一度ボタンを押します。
+  ],
+  verify: [次の画面に進むこと。],
+) <err-noselect>
+
+#errorcard(
+  [「ファイル "..." は既に存在します。」],
+  id: "E-111",
+  level: "info",
+  symptom: [
+    ファイル名の変更、または新規ファイルの作成が拒否される。
+  ],
+  shown: [
+    #console(title: "ブラウザ上部の表示")[```
+ファイル "maps_and_waypoints.csv" は既に存在します。
+```]
+  ],
+  cause: [
+    同じ名前のファイルがすでにあります。
+    #tsuyo[上書きを防ぐための安全機能]であり、故障ではありません。
+  ],
+  fix: [
+    + 別の名前を付けます。日付を入れると重複しにくくなります
+      （例: `route_20260401`）。
+    + 古いほうが不要であれば、先に削除してから作成し直します。
+      #tsuyo[削除は元に戻せません。] 必要なものは先に控えを取ってください。
+  ],
+  verify: [新しい名前で作成・変更できること。],
+) <err-file-exists>
+
+#errorcard(
+  [「拡張子の変更はできません。ファイル名のみ変更してください。」],
+  id: "E-112",
+  level: "info",
+  symptom: [
+    ファイル名をダブルクリックして書き換えると、この文言が出て元に戻る。
+  ],
+  cause: [
+    `.pcd` を `.pgm` に変えるなど、#tsuyo[ピリオドより後ろ]を書き換えています。
+    拡張子はファイルの種類を表すため、変更できないようになっています。
+  ],
+  fix: [
+    + #tsuyo[ピリオドより前]だけを書き換えてください。\
+      例: `old_map.pcd` → `new_map.pcd`（`.pcd` はそのまま）
+    + 地図の名前を変えるときは、
+      `.pcd` `.pgm` `.yaml` と経路の `.json` を
+      #tsuyo[すべて同じ名前]に揃える必要があります（@err-map-name）。
+  ],
+  verify: [新しい名前が一覧に反映されること。],
+) <err-ext-change>
+
+#errorcard(
+  [「不正なファイルパスです。」「許可されていないパスへのアクセスが試行されました。」],
+  id: "E-113",
+  level: "warn",
+  symptom: [
+    ファイルを開こう・保存しようとすると、赤い帯でこのメッセージが出る。
+  ],
+  shown: [
+    #console(title: "ブラウザ上部の表示")[```
+不正なファイルパスです。
+許可されていないパスへのアクセスが試行されました。
+セキュリティ上の理由により、このディレクトリにはアクセスできません。
+```]
+  ],
+  cause: [
+    決められたフォルダ（#path[map/]、#path[rosbag/]、#path[waypoints/]、#path[config/]）の
+    #tsuyo[外]を指すパスが指定されました。
+    ブラウザの URL を直接書き換えたときや、ファイル名に `../` が含まれるときに起こります。
+  ],
+  fix: [
+    + ブラウザで #link("http://localhost:5050")[`http://localhost:5050`] を開き直し、
+      #tsuyo[画面のボタンから]たどり直してください。
+    + ファイル名に `/` や `..` を使わないでください。
+    + 別の場所にあるファイルを使いたい場合は、
+      端末で対象のフォルダへコピーしてから操作します。
+
+      #terminal[```bash
+cp <元のファイル> ~/colcon_ws/src/hokuyo_navigation2/hokuyo_navigation2/map/
+```]
+  ],
+  verify: [ファイルが開けること。],
+) <err-path-invalid>
+
+#errorcard(
+  [「無効なディレクトリタイプです。」],
+  id: "E-114",
+  level: "info",
+  symptom: [
+    ファイル管理の画面を開こうとするとメイン画面に戻され、この文言が出る。
+  ],
+  cause: [
+    ブラウザの URL の末尾（`map` / `wp` / `config` のいずれか）が
+    書き換わっています。ブックマークが古い場合にも起こります。
+  ],
+  fix: [
+    + メインページから #btn[ファイル管理] を押して開き直します。
+    + 古いブックマークは削除してください。
+  ],
+  verify: [ファイル管理の画面が開くこと。],
+) <err-dirtype>
+
+#errorcard(
+  [「警告: YAMLファイル "..." の読み込みに失敗しました。」],
+  id: "E-115",
+  level: "warn",
+  symptom: [
+    Map Viewer を開くと 3D 点群は出るが、2D 地図（灰色の面）が出ず、
+    黄色い帯でこの警告が出る。
+  ],
+  shown: [
+    #console(title: "ブラウザ上部の表示")[```
+警告: YAMLファイル "my_map.yaml" の読み込みに失敗しました。
+```]
+  ],
+  cause: [
+    2D 地図の設定ファイル（`.yaml`）が無いか、中身が壊れています。
+    #tsuyo[2D 地図への変換（@sec-2d-map）をまだ行っていない]場合にもこの警告が出ます。
+  ],
+  fix: [
+    + `.yaml` が存在するか確認します。
+
+      #terminal[```bash
+ls ~/colcon_ws/src/hokuyo_navigation2/hokuyo_navigation2/map/ | grep -e .yaml -e .pgm
+```]
+    + 無ければ @sec-2d-map の手順で 2D 地図を作成します。
+    + あるのに読めない場合は中身を確認します。
+      `image:`、`resolution:`、`origin:` の 3 行が必要です。
+
+      #terminal[```bash
+cat ~/colcon_ws/src/hokuyo_navigation2/hokuyo_navigation2/map/<地図名>.yaml
+```]
+
+      #console(title: "正常な .yaml の例")[```
+{free_thresh: 0.196, image: akashi_kosen.pgm, negate: 0,
+ occupied_thresh: 0.65, origin: [-4.35, -12.40, 0.0], resolution: 0.05}
+```]
+    + 壊れている場合は 2D 地図への変換をやり直してください。
+  ],
+  verify: [Map Viewer に 2D 地図が表示されること。],
+) <err-yaml-load>
+
+#errorcard(
+  [「警告: Waypointファイル "..." の読み込みに失敗しました。」],
+  id: "E-116",
+  level: "warn",
+  symptom: [
+    Map Viewer に地図は出るが、経路（色付きの矢印）が表示されない。
+  ],
+  cause: [
+    経路ファイル（`.json`）が無いか、テキスト編集で壊れています。
+  ],
+  fix: [
+    + ファイルの有無を確認します。
+      #tsuyo[地図と同じ名前]である必要があります。
+
+      #terminal[```bash
+ls ~/colcon_ws/src/hokuyo_navigation2/hokuyo_navigation2/waypoints/
+```]
+    + 形式が壊れていないか確認します。
+      何も表示されなければ正常、エラーが出れば壊れています。
+
+      #terminal[```bash
+python3 -m json.tool \
+  ~/colcon_ws/src/hokuyo_navigation2/hokuyo_navigation2/waypoints/<経路名>.json > /dev/null
+```]
+    + 壊れている場合は、マッピングをやり直して経路を作り直すか、
+      控えのファイルに戻してください。
+  ],
+  verify: [Map Viewer に経路が表示されること。],
+) <err-wp-load>
+
+#errorcard(
+  [「ダウンロード用のファイルが見つかりません。」],
+  id: "E-117",
+  level: "info",
+  symptom: [
+    ファイル管理から地図や rosbag をダウンロードしようとすると失敗する。
+  ],
+  shown: [
+    #console(title: "ブラウザ上部の表示")[```
+ダウンロード用のファイルが見つかりません。
+ダウンロード用のマップファイルが見つかりません。
+ファイルのZIP化中にエラーが発生しました: ...
+```]
+  ],
+  cause: [
+    対象のファイルが削除・改名されているか、
+    ZIP を作る一時領域の空き容量が不足しています。
+  ],
+  fix: [
+    + 一覧を再読み込みし、ファイルが実在するか確認します。
+    + ディスクの空き容量を確認します。
+      `Use%` が 95% を超えていたら不足です（@err-disk-full）。
+
+      #terminal[```bash
+df -h /
+```]
+    + 巨大な rosbag は、ダウンロードではなく
+      USB メモリへ直接コピーすることをおすすめします。
+
+      #terminal[```bash
+cp -r ~/colcon_ws/src/hokuyo_navigation2/hokuyo_navigation2/rosbag/<名前> /media/<ユーザ名>/<USB名>/
+```]
+  ],
+  verify: [ファイルがダウンロードできること。],
+) <err-download>
+
+#errorcard(
+  [PCD から PGM への変換画面で「Internal Server Error」が出る],
+  id: "E-118",
+  level: "warn",
+  symptom: [
+    2D 地図への変換画面を開いたときに、
+    白い画面に英語で `Internal Server Error` とだけ表示される。
+  ],
+  shown: [
+    #figure(
+      image("img/g_pcd2pgm_500.png", width: 82%),
+      caption: [変換元 PCD を選ばずに変換画面を開いたときの表示],
+    ) <im-pcd2pgm-500>
+  ],
+  cause: [
+    #tsuyo[変換元の PCD ファイルを選ばずに]変換画面を開いています。
+    本来は「エラー: 変換元のPCDファイルが指定されていません。」と表示して
+    メインページへ戻る動作ですが、
+    現在のバージョンでは戻り先の指定に誤りがあるため、
+    代わりにこの英語のエラー画面になります。
+  ],
+  fix: [
+    + ブラウザの #btn[戻る] でメインページに戻ります。
+      戻れない場合は #link("http://localhost:5050")[`http://localhost:5050`] を開き直します。
+    + #btn[マッピング] → #btn[pcd2pgm] の順に押し、
+      #tsuyo[一覧から PCD ファイルを選んでから] #btn[PCDとして選択] を押します。
+    + 変換画面に「変換元PCDファイル: ○○.pcd」と表示されていることを確認してから
+      #btn[変換開始] を押します。
+  ],
+  verify: [
+    変換画面の上部に、選んだ PCD ファイル名が表示されること。
+  ],
+) <err-pcd2pgm-500>
+
+#errorcard(
+  [ブラウザ上部に赤い帯でエラーが表示される（共通）],
+  id: "E-119",
+  level: "info",
+  symptom: [
+    操作のあと、画面の上に色の付いた帯でメッセージが出る。
+  ],
+  cause: [
+    GUI は、操作の結果を#tsuyo[画面上部の帯]で知らせます。
+    色によって意味が異なります。
+  ],
+  fix: [
+    #figure(
+      stable(
+        columns: (auto, 1fr),
+        [*色*], [*意味と対応*],
+        [赤], [エラー。操作は実行されていません。文言を本章から探してください],
+        [黄], [警告。一部だけ実行されています。結果を必ず確認してください],
+        [青], [案内。次に何をすればよいかの指示です],
+        [緑], [成功。操作は完了しています],
+      ),
+      caption: [画面上部に出る帯の色と意味],
+    ) <tab-flash-colors>
+
+    帯は数秒で消えることがあります。
+    #tsuyo[読み逃した場合は、同じ操作をもう一度行ってください。]
+  ],
+  verify: [—],
+) <err-flash>
+
 == データ取得に関するエラー <subsec-err-getdata>
 
 #errorcard(
@@ -329,7 +738,7 @@ python3 -m json.tool ~/colcon_ws/src/hokuyo_navigation2/hokuyo_navigation2/waypo
   fix: [
     + #tsuyo[非常停止スイッチが解除されているか]を確認します。もっとも多い原因です。
     + ジョイスティックのアイコンを選択し、
-      速度トピック名が `wizurg/cmd_vel` になっているか確認します（@sub23）。
+      速度トピック名が `/wizurg/cmd_vel` になっているか確認します（@fig-viz-teleop）。
     + モータドライバの端末（@sub12）が開いていて、エラーが出ていないか確認します。
     + 速度指令が実際に出ているかを端末で確認します。
       ジョイスティックを操作している間、数値が流れれば GUI 側は正常です。
@@ -414,8 +823,94 @@ ros2 topic hz /fix
 ) <err-bag-empty>
 
 #errorcard(
-  [センサのデータがまったく届かない],
+  [「Recording started.」と出るのに rosbag が作られない],
   id: "E-204",
+  level: "danger",
+  symptom: [
+    Bag Recorder で #btn[Start recording] を押し、
+    「Recording started.」と表示されてアイコンも赤に変わる。
+    しかし記録を停止したあと、`rosbag/` の中に#tsuyo[フォルダが 1 つもできていない]。
+  ],
+  shown: [
+    #console(title: "Vizanti の画面に出るメッセージ")[```
+Are you sure you want to start recording a bag?   → OK
+Recording started.
+```]
+    その後、停止したときも正常時と同じ表示になります。
+    #console(title: "停止したとき")[```
+Are you sure you want to stop recording?   → OK
+Recording stopped.
+```]
+  ],
+  cause: [
+    「Topics：」で#tsuyo[トピックを 1 つも選ばずに]記録を開始しています。\
+    Vizanti は「記録の指示を出した」ところまでしか確認しないため、
+    実際の記録コマンドが引数不足で失敗しても、
+    画面には「Recording started.」と表示されてしまいます。
+  ],
+  fix: [
+    + Bag Recorder の画面を開き、「Topics：」の下に
+      #tsuyo[青（オン）になっている項目があるか]を確認します（@fig-viz-bag-topics）。
+      すべて灰色（オフ）なら、これが原因です。
+    + 型の見出し（`sensor_msgs/msg/PointCloud2` など）をクリックして開き、
+      @tab-bag-topics の 5 つをオンにします。
+    + 迷う場合は #btn[Select All] を押して全トピックを選んでも構いません。
+      ファイルは大きくなりますが、記録漏れは防げます。
+    + もう一度 #btn[Start recording] から記録し直します。
+  ],
+  verify: [
+    記録の停止後に、`rosbag/` の中に#tsuyo[日時付きのフォルダ]ができていること。
+
+    #terminal[```bash
+ls -lt ~/colcon_ws/src/hokuyo_navigation2/hokuyo_navigation2/rosbag/ | head -3
+```]
+  ],
+) <err-bag-notopic>
+
+#errorcard(
+  [Vizanti に点群（Point Cloud）が表示されない],
+  id: "E-205",
+  level: "info",
+  symptom: [
+    Vizanti に Point Cloud ウィジェットを追加しても、
+    点群が表示されない。または、原点に小さな点が 1 つ出るだけになる。
+    ウィジェットの表示は `Status: Ok` のままで、エラーは出ない。
+  ],
+  cause: [
+    #tsuyo[異常ではありません。]
+    Vizanti の Point Cloud ウィジェットは実験的な機能で、
+    RSF が出力する形式の点群を正しく読めません。
+    そのため、すべての点が座標 (0,0,0) として扱われ、1 か所に重なってしまいます。\
+    ウィジェットの設定画面にも、次の断り書きが表示されています。
+  ],
+  shown: [
+    #console(title: "Point Cloud ウィジェットの設定画面")[```
+Currently experimental and might not decode all cloud formats correctly.
+XYZ coordinate data is required, the rest is ignored for now.
+```]
+  ],
+  fix: [
+    + #tsuyo[点群を目で確認したい場合は、Vizanti ではなく次のいずれかを使ってください。]
+      - GUI の #btn[Map Viewer]（3D Viewer）── 作成済みの地図を見る場合（@sub5）
+      - RViz2 ── 記録中のセンサ出力をその場で見る場合
+    + データ取得中に「センサが生きているか」を確かめるだけであれば、
+      #tsuyo[Pose Tracker の軌跡]（@fig-viz-overview のオレンジの矢印）が
+      伸びているかで判断できます。
+    + 数値で確かめる場合は、端末で流量を見ます。
+
+      #terminal[```bash
+ros2 topic hz /hokuyo3d/hokuyo_cloud2
+```]
+  ],
+  verify: [
+    Map Viewer または RViz2 で点群が表示されること。
+    Vizanti 側は表示されないままで問題ありません。
+  ],
+) <err-viz-pointcloud>
+
+#errorcard(
+  [センサのデータがまったく届かない],
+  id: "E-206",
   level: "warn",
   symptom: [
     `ros2 topic list` に `/hokuyo3d/hokuyo_cloud2` や `/fix` が表示されない。
@@ -450,7 +945,7 @@ sudo ufw allow 10940/tcp
 
 #errorcard(
   [GNSS のデータが届かない／精度が上がらない],
-  id: "E-205",
+  id: "E-207",
   level: "warn",
   symptom: [
     RViz2 の画面に「GNSSの精度: N/A」と白字で表示される。
@@ -482,6 +977,155 @@ ros2 topic echo /fix --once
   ],
 ) <err-no-gnss>
 
+#errorcard(
+  [「ROS Bagフィルタのコア機能がインポートされていません。ROS環境を確認してください。」],
+  id: "E-208",
+  level: "warn",
+  symptom: [
+    rosbag のフィルタ機能を使おうとすると、赤い帯でこのメッセージが出て実行できない。
+  ],
+  shown: [
+    #console(title: "GUI サーバの端末")[```
+Error: Core logic file (rosbag2_filter_core.py) or ROS 2 libraries not found/sourced: \
+No module named 'rosbag2_py'
+```]
+  ],
+  cause: [
+    GUI サーバを#tsuyo[ROS 2 の環境を読み込まずに]起動しています。
+    `rosbag2_py` は ROS 2 に付属するため、`source` を忘れると読み込めません。
+  ],
+  fix: [
+    + いったんサーバを停止します。
+
+      #terminal[```bash
+cd ~/colcon_ws/src/hokuyo_navigation2/hokuyo_navigation2/scripts
+./stop_server.sh
+```]
+    + #tsuyo[必ず `start_server.sh` から]起動し直します。
+      このスクリプトの中で ROS 2 の環境が読み込まれます。
+
+      #terminal[```bash
+./start_server.sh
+```]
+    + それでも直らない場合は、端末で直接読み込んでから確認します。
+
+      #terminal[```bash
+source /opt/ros/$ROS_DISTRO/setup.bash
+source ~/colcon_ws/install/setup.bash
+python3 -c "import rosbag2_py; print('OK')"
+```]
+  ],
+  verify: [
+    rosbag を選ぶとトピック一覧が表示されること。
+  ],
+) <err-bagfilter-import>
+
+#errorcard(
+  [「選択されたファイル形式はROS Bagとしてサポートされていません。」],
+  id: "E-209",
+  level: "info",
+  symptom: [
+    rosbag を選んだのに、この文言が出て先に進まない。
+  ],
+  cause: [
+    ROS 2 の rosbag は#tsuyo[フォルダ]です。
+    その中にある `.mcap` や `.db3` の#tsuyo[ファイル 1 つ]を選ぶと、
+    形式が違うと判断されることがあります。
+    また `.bag`（ROS 1 形式）は扱えません。
+  ],
+  fix: [
+    + 一覧では、#tsuyo[日付から始まるフォルダ名]
+      （例: `2026-08-07-14-27-kato-support`）を選んでください。
+      その中の `..._0.mcap` は選びません。
+    + フォルダの中身が正しいか確認します。
+      `metadata.yaml` と `..._0.mcap`（または `.db3`）が必要です。
+
+      #terminal[```bash
+ls ~/colcon_ws/src/hokuyo_navigation2/hokuyo_navigation2/rosbag/<rosbag名>/
+```]
+  ],
+  verify: [トピック一覧の画面に進めること。],
+) <err-bag-format>
+
+#errorcard(
+  [「トピックを一つ以上選択してください。」「出力ファイル名を入力してください。」],
+  id: "E-210",
+  level: "info",
+  symptom: [
+    フィルタや変換の実行ボタンを押しても進まず、この文言が出る。
+  ],
+  shown: [
+    #console(title: "ブラウザ上部の表示")[```
+トピックフィルタリングにはトピックを一つ以上選択してください。
+出力ファイル名を入力してください。
+出力マップ名を入力してください。
+```]
+  ],
+  cause: [
+    必須の入力が空のままです。
+  ],
+  fix: [
+    + 残したいトピックにチェックを入れます。
+      地図作成に必要なトピックは @tab-bag-topics のとおりです。
+    + 出力名を入力します。#tsuyo[元の rosbag と同じ名前は使えません。]
+      末尾に `_filtered` を付けるなど、区別できる名前にしてください。
+    + 出力名に空白や日本語を使わないでください。
+      半角英数字、`_`、`-` のみを使います。
+  ],
+  verify: [処理が始まること。],
+) <err-bag-input>
+
+#errorcard(
+  [「入力ファイルが見つかりません。パスを確認してください。」],
+  id: "E-211",
+  level: "warn",
+  symptom: [
+    トピック一覧までは表示されたのに、実行すると入力ファイルが無いと言われる。
+  ],
+  cause: [
+    画面を開いたあとに、対象の rosbag が削除・改名されました。
+    複数のブラウザタブで別々の操作をしている場合に起こりやすい症状です。
+  ],
+  fix: [
+    + 開いているタブをすべて閉じます。
+    + #link("http://localhost:5050")[`http://localhost:5050`] を開き直し、
+      #tsuyo[1 つのタブだけ]で操作をやり直します。
+    + rosbag が実在するか確認します。
+
+      #terminal[```bash
+ls ~/colcon_ws/src/hokuyo_navigation2/hokuyo_navigation2/rosbag/
+```]
+  ],
+  verify: [処理が最後まで進むこと。],
+) <err-bag-inputmissing>
+
+#errorcard(
+  [「リクエストJSONのパースエラー: ...」「処理中にエラーが発生しました: ...」],
+  id: "E-212",
+  level: "warn",
+  symptom: [
+    実行ボタンを押した直後に、この文言が出て何も起こらない。
+  ],
+  cause: [
+    ブラウザとサーバの間の通信が途中で壊れたか、
+    サーバ側で想定外の例外が発生しています。
+    ネットワークが不安定なとき、サーバを再起動した直後などに起こります。
+  ],
+  fix: [
+    + ブラウザのページを再読み込み（#kbd[F5]）してからやり直します。
+    + それでも直らない場合は、#tsuyo[GUI サーバの端末]を確認してください。
+      `Traceback` で始まる詳しいエラーが出ています。
+      その最後の 1 行を控えて、問い合わせ時に添えてください（@subsec-trouble-report）。
+    + サーバを再起動します。
+
+      #terminal[```bash
+cd ~/colcon_ws/src/hokuyo_navigation2/hokuyo_navigation2/scripts
+./stop_server.sh && sleep 3 && ./start_server.sh
+```]
+  ],
+  verify: [処理が始まること。],
+) <err-json-parse>
+
 == マッピングに関するエラー <subsec-err-mapping>
 
 #note[
@@ -507,23 +1151,23 @@ ros2 topic echo /fix --once
 
     [② GNSS 品質確認 \ #text(size: 8pt)[（GNSS 補正モードのみ）]],
     [rosbag 内の GNSS の共分散を集計し、`gnss_log/` に CSV を出力],
-    [@err-gnsslog-fail],
+    [@err-gnsslog-fail \ @err-topic-gnss],
 
     [③ グラフ生成],
     [rosbag から位置の情報を取り出し、`output.p2o` を作る],
-    [@err-p2o-empty \ @err-p2o-stdout],
+    [@err-p2o-empty \ @err-p2o-stdout \ @err-topic-lio],
 
     [④ 最適化],
     [`run_p2o` が位置のつじつまを合わせ、`output.p2o_out.txt` を作る],
-    [@err-p2o-optfail \ @err-runp2o-silent],
+    [@err-p2o-optfail \ @err-runp2o-silent \ @err-runp2o-segv \ @err-centerutm-broken],
 
     [⑤ 点群の抽出],
     [rosbag から地図に使う点群を取り出す],
-    [@err-pcd-extract],
+    [@err-pcd-extract \ @err-topic-pc],
 
     [⑥ 点群の結合],
     [`rearrange_pointcloud` が点群を並べ直し、地図と経路を作る],
-    [@err-concat-broken],
+    [@err-concat-broken \ @err-savedist-nan],
 
     [⑦ 座標変換と保存],
     [絶対座標を相対座標に直し、`map/` へ移動して完了フラグを作る],
@@ -531,6 +1175,19 @@ ros2 topic echo /fix --once
   ),
   caption: [p2o マッピングの処理段階],
 ) <tab-mapping-stages>
+
+#tip[
+  #tsuyo[④ と ⑥ では、設定値の誤りによって「コアダンプ」と表示されて
+  強制終了することがあります。]
+  条件の一覧は @tab-mapping-coredump にまとめています。
+]
+
+#note[
+  `lio_raw` モードは③〜⑦を 1 つのプログラムでまとめて行います。
+  段階の切り分けができないため、
+  #tsuyo[端末の `Config:` の行と、最後の `Total points saved:` の行]で判断します
+  （@err-frame-mismatch）。
+]
 
 === 「エラーが出ないのに失敗している」場合 <subsubsec-mapping-silent>
 
@@ -1059,8 +1716,8 @@ ros2 bag info ~/colcon_ws/src/hokuyo_navigation2/hokuyo_navigation2/rosbag/<rosb
     #stable(
       columns: (auto, 1fr),
       [*条件*], [*内容*],
-      [測位状態], [`status` が 0（FIX）または 2（GBAS FIX）であること。
-       #tsuyo[1（SBAS）は採用されません]],
+      [測位状態], [`status` が 0（FIX）、1（SBAS FIX）、2（GBAS FIX）の
+       いずれかであること。#tsuyo[−1（測位できていない）だけが除外されます]],
       [精度], [共分散が `gnss_cov_thre` より小さいこと],
       [移動量], [前に採用した点から `gnss_min_movement_thre`（既定 4.0 m）
        以上離れていること],
@@ -1072,10 +1729,11 @@ ros2 bag info ~/colcon_ws/src/hokuyo_navigation2/hokuyo_navigation2/rosbag/<rosb
       移動量の条件で全点が落ちている可能性が高いためです。
     + `gnss_cov_thre` を大きくします（例 `0.01` → `0.1`）。
       精度の条件がきびしすぎる場合に効きます。
-    + 受信機が SBAS 測位（`status` が 1）しか行っていない場合、
-      このモードでは地図を作れません。
-      RTK 補正が有効になっているか確認するか、
-      `slam_mode` を `gravity` にして IMU 補正モードで作成してください。
+    + `status` が `-1` ばかりの場合は、受信機が測位できていません。
+      空が開けた場所で数分待ってから記録し直してください（@err-no-gnss）。
+    + それでも採用されない場合は、
+      `slam_mode` を `gravity` にして IMU 補正モードで作成するか、
+      `lio_raw` モードで GNSS を使わずに作成してください（@subsec-mapping-choose）。
     + 測位状態は次のコマンドで確認できます。`status:` の値を見てください。
 
       #terminal[```bash
@@ -1441,14 +2099,28 @@ Warning: All waypoints were filtered out or removed during stabilization.
   cause: [
     次のいずれかです。いずれも#tsuyo[異常終了として扱われないため、
     完了フラグが作られます]。
+    - #tsuyo[`orig_frame` / `target_frame` が LIO トピックと一致していない]
+      （最も多い原因。@err-frame-mismatch）
+    - #tsuyo[`pointcloud_topic` が rosbag に存在しない]（@err-frame-mismatch）
     - `pc_save_distance` が大きすぎて、点群が一度も保存されなかった
     - ロボットがほとんど移動していない rosbag を使った
     - 経路点が 4 個以下だった。
       仕様上、経路の#tsuyo[最初の 2 点と最後の 2 点は自動で削除される]ため、
       少ないと全部消えます
+
+    #tip[
+      端末の `Config:` の行を読むと切り分けられます。
+      `Reading topics:` に点群のトピックが載っていなければトピック名の誤り、
+      載っているのに 0 点ならフレーム名の誤りです。
+    ]
   ],
   fix: [
-    + 地図作成コンフィグの `pc_save_distance` を小さくします（例 `1.0` → `0.3`）。
+    + まず `Config: Frames=... -> ...` の行が
+      センサ設定と一致しているか確認します（@subsubsec-config-checkframe）。
+      #tsuyo[ここが違っていると、他を直しても解決しません。]
+    + 地図作成コンフィグで `pc_save_distance` を小さくします
+      （例 `1.0` → `0.3`）。`0` にすると間引かずにすべて使います
+      （@tab-pcsave-density）。
     + `wp_save_distance` を小さくします（例 `4.0` → `0.5`）。
       経路点の数が増え、前後 2 点ずつ削除されても残ります。
     + 走行距離が短すぎる rosbag では地図になりません。
@@ -1498,11 +2170,484 @@ rm ~/colcon_ws/src/hokuyo_navigation2/hokuyo_navigation2/map/test.tmp
   verify: [`map/` に `.pcd` ができること。],
 ) <err-pcd-write>
 
+=== 設定ミスによる異常終了と無言の失敗 <subsubsec-err-mapping-config>
+
+コンフィグの値を間違えたときに何が起きるかを @tab-mapping-misconfig にまとめます。
+#tsuyo[多くの場合「完了しました」と表示されるため、
+端末の途中に出るメッセージを見ないと失敗に気付けません。]
+
+#figure(
+  stable(
+    columns: (auto, 1fr, auto, auto),
+    [*間違えた項目*], [*端末に最初に出る手がかり*], [*完了表示*], [*参照*],
+    [`pc_save_distance` / \ `wp_save_distance` \ が数字でない],
+    [`エラー: ... に数値として読めない値が指定されました`],
+    [出る], [@err-savedist-nan],
+
+    [`pointcloud_topic`（p2o）],
+    [`Topic '...' not found in bag file.`],
+    [出る], [@err-topic-pc],
+
+    [`lio_topic`（p2o）],
+    [`can't open file: data/<地図名>/center_utm.txt`],
+    [出る], [@err-topic-lio],
+
+    [`gnss_topic`（p2o）],
+    [`Error (ROS 2): Topic '...' not found in '...'`],
+    [#tsuyo[出ない]], [@err-topic-gnss],
+
+    [`pointcloud_topic`（lio_raw）],
+    [`No point clouds were saved due to filtering or empty data.`],
+    [出る], [@err-frame-mismatch],
+
+    [`orig_frame` / `target_frame`（lio_raw）],
+    [同上（#tsuyo[それ以外に手がかりが無い]）],
+    [出る], [@err-frame-mismatch],
+  ),
+  caption: [設定を間違えたときに起きること],
+) <tab-mapping-misconfig>
+
+#tip[
+  #tsuyo[失敗したかどうかは、地図ファイルができているかで判断するのが確実です。]
+
+  #terminal[```bash
+ls -lh ~/colcon_ws/src/hokuyo_navigation2/hokuyo_navigation2/map/<地図名>.pcd
+```]
+
+  `No such file or directory` と表示されるか、
+  サイズが数百 KB 未満であれば失敗しています。
+]
+
+#errorcard(
+  [「エラー: … に数値として読めない値が指定されました」],
+  id: "E-328",
+  level: "warn",
+  symptom: [
+    p2o マッピングの終盤で日本語のエラーが出る。
+    #tsuyo[そのあと「完了しました」と表示されるが、地図はできていない。]
+  ],
+  shown: [
+    #console(title: "マッピングの端末（実行例）")[```
+Saved 112 point cloud files (mcap).
+エラー: 点群結合間隔 (pc_save_distance) に数値として読めない値が指定されました: 'abc'
+[Errno 2] No such file or directory: '.../data/<地図名>/<地図名>_Acord.pcd'
+入力ファイルが見つかりません。
+mv: cannot stat 'data/<地図名>/<地図名>_Rcord.pcd': No such file or directory
+P2O SLAM completion flag created: .../map/<地図名>.P2O_DONE
+```]
+
+    `wp_save_distance` が原因の場合は、1 行目が次のようになります。
+
+    #console(title: "Waypoint 設置間隔が誤っている場合")[```
+エラー: Waypoint設置間隔 (wp_save_distance) には 0 以上の数値を指定してください: '-1'
+```]
+  ],
+  cause: [
+    `pc_save_distance` または `wp_save_distance` に、
+    #tsuyo[数値として読めない値]が入っています。
+
+    値が空欄になっている、全角数字（`１.０`）になっている、
+    単位を付けてしまっている（`1.0m`）、
+    末尾に余分な文字や空白がある、負の値になっている、
+    といった場合に起こります。
+  ],
+  fix: [
+    + 設定ファイルの該当行を確認します。
+
+      #terminal[```bash
+grep -e pc_save_distance -e wp_save_distance \
+  ~/colcon_ws/src/hokuyo_navigation2/hokuyo_navigation2/config/<設定ファイル名>.csv
+```]
+    + 次の形になるよう直します。#tsuyo[すべて半角の数字]で、
+      単位（`m`）は付けないでください。
+
+      #terminal[```csv
+pc_save_distance,1.0
+wp_save_distance,4.0
+```]
+    + カンマの前後に空白を入れないでください。
+    + 保存して、マッピングをやり直します。
+      値の意味と目安は @tab-pcsave-density を参照してください。
+  ],
+  verify: [
+    端末に `PointCloud Distance Filter: ... m` と
+    `結合した点群: N 枚 / M 枚中` が表示され、N が 0 でないこと。
+  ],
+) <err-savedist-nan>
+
+#errorcard(
+  [`pointcloud_topic` を間違えた（p2o）],
+  id: "E-329",
+  level: "danger",
+  symptom: [
+    p2o マッピングが「完了しました」で終わるのに、地図ができていない。
+    端末に `Warning: Skipping malformed log line:` が大量に流れる。
+  ],
+  shown: [
+    #console(title: "マッピングの端末")[```
+run_p2o
+data/<地図名>/output.p2o: 0.416556s
+Found MCAP files: ['.../2026-08-07-14-27-kato-support_0.mcap']
+Topic '/wrong/cloud' not found in bag file.
+Warning: Skipping malformed log line: 	2.8702101437 -1.5885832626 2.1697989125 ...
+Warning: Skipping malformed log line: 	2.8715476592 -1.5822422395 2.1695191701 ...
+（同じ警告が数百行続く）
+[pcl::PCDWriter::writeASCII] Input point cloud has no data!
+PCDファイルを保存しました: <地図名>_Acord.pcd
+エラー：入力ファイルの形式が不正です。原点の行が見つかりません。
+```]
+  ],
+  cause: [
+    `pointcloud_topic` に書いた名前が rosbag に存在しないため、
+    点群が 1 つも取り出せていません。
+
+    `Topic '...' not found in bag file.` が#tsuyo[本当の原因を示す 1 行]です。
+    その後の大量の警告は、点群が無いことによる二次的な症状です。
+  ],
+  fix: [
+    + rosbag に実在するトピック名を確認します。
+
+      #terminal[```bash
+cd ~/colcon_ws/src/hokuyo_navigation2/hokuyo_navigation2
+ros2 bag info rosbag/<rosbag名>
+```]
+    + `sensor_msgs/msg/PointCloud2` 型で `Count:` が 0 でないものを探します。
+      多くの場合 `/hokuyo3d/hokuyo_cloud2` です。
+    + 設定ファイルの `pointcloud_topic` を、その名前に直します。
+      #tsuyo[先頭の `/` を含めて一字一句同じ]にしてください。
+    + 保存して、マッピングをやり直します。
+  ],
+  verify: [
+    端末に `Saved N point cloud files (mcap).` が表示され、
+    N が 0 でないこと。
+  ],
+) <err-topic-pc>
+
+#errorcard(
+  [`lio_topic` を間違えた（p2o）],
+  id: "E-330",
+  level: "danger",
+  symptom: [
+    p2o マッピングが「完了しました」で終わるのに、地図ができていない。
+  ],
+  shown: [
+    #console(title: "マッピングの端末")[```
+p2o_from_rosbag
+error status: 0
+run_p2o
+can't open file: data/<地図名>/center_utm.txt
+Found MCAP files: ['.../2026-08-07-14-27-kato-support_0.mcap']
+Traceback (most recent call last):
+  File ".../src/extract_pcd_ros2.py", line 163, in extract_and_save_pointcloud_mcap
+    with open(lio_edge_timestamps_path, "r") as f:
+FileNotFoundError: [Errno 2] No such file or directory: \
+'.../data/<地図名>/lio_edge_timestamps.txt'
+[pcl::PCDWriter::writeASCII] Input point cloud has no data!
+エラー：p2o ファイルの行数が不足しています。
+```]
+  ],
+  cause: [
+    `lio_topic` に書いた名前が rosbag に存在しないため、
+    位置の情報が 1 つも取り出せていません。
+
+    #tsuyo[`error status: 0` と表示されていても失敗しています。]
+    本当の手がかりは、その次の
+    `can't open file: data/<地図名>/center_utm.txt` の行です。
+  ],
+  fix: [
+    + rosbag に実在するトピック名を確認します。
+
+      #terminal[```bash
+cd ~/colcon_ws/src/hokuyo_navigation2/hokuyo_navigation2
+ros2 bag info rosbag/<rosbag名>
+```]
+    + `nav_msgs/msg/Odometry` 型で `Count:` が 0 でないものを探します。
+      `/rsf/lio_imu_rate_odom` または `/rsf/lio_lidar_rate_odom` のどちらかです
+      （@tab-lio-topics）。
+    + 設定ファイルの `lio_topic` を、その名前に直します。
+    + 保存して、マッピングをやり直します。
+  ],
+  verify: [
+    #path[data/\<地図名\>/] に `center_utm.txt` ができていること。
+
+    #terminal[```bash
+ls ~/colcon_ws/src/hokuyo_navigation2/hokuyo_navigation2/data/<地図名>/
+```]
+  ],
+) <err-topic-lio>
+
+#errorcard(
+  [`gnss_topic` を間違えた（p2o）],
+  id: "E-331",
+  level: "danger",
+  symptom: [
+    p2o マッピングを開始しても、端末がすぐ止まって何も進まない。
+    ブラウザは「処理中」のまま終わらない。
+  ],
+  shown: [
+    #console(title: "マッピングの端末")[```
+Found ROS 2 bag file (prioritized): .../2026-08-07-14-27-kato-support_0.mcap
+Error (ROS 2): Topic '/wrong/fix' not found in '.../2026-08-07-14-27-kato-support_0.mcap'.
+cat: gnss_log/<地図名>_gnss_cov_0.01.csv: No such file or directory
+```]
+  ],
+  cause: [
+    `gnss_topic` に書いた名前が rosbag に存在しません。
+
+    p2o は最初に GNSS の品質を調べますが、その結果ファイルが作られないため、
+    #tsuyo[それ以降の処理そのものが実行されません]。
+    完了フラグも作られないため、ブラウザは終了を検知できません。
+  ],
+  fix: [
+    + ブラウザの「処理中」のタブを閉じます。
+    + rosbag に実在する GNSS のトピック名を確認します。
+
+      #terminal[```bash
+cd ~/colcon_ws/src/hokuyo_navigation2/hokuyo_navigation2
+ros2 bag info rosbag/<rosbag名>
+```]
+    + `sensor_msgs/msg/NavSatFix` 型で `Count:` が 0 でないものを探します。
+      多くの場合 `/fix` です。
+    + 設定ファイルの `gnss_topic` を、その名前に直します。
+    + GNSS を使わずに地図を作りたい場合は、
+      `slam_mode` を `lio_raw` にするか、
+      #btn[lio_raw] モードでマッピングしてください（@subsec-mapping-choose）。
+  ],
+  verify: [
+    端末に `ROS 2 data from '...' written to .../gnss_log/<地図名>_gnss_cov_....csv`
+    と表示され、`p2o 開始` へ進むこと。
+  ],
+) <err-topic-gnss>
+
+#errorcard(
+  [フレーム名の指定ミスで、何のエラーも出ずに空の地図ができる（lio_raw）],
+  id: "E-332",
+  level: "danger",
+  symptom: [
+    lio_raw マッピングが正常に終わったように見えるのに、
+    #path[map/] に `.pcd` がまったく作られていない。
+    経路（`.json`）だけはできている。
+  ],
+  shown: [
+    #console(title: "マッピングの端末")[```
+Config: PCD=/hokuyo3d/hokuyo_cloud2, ODOM=/rsf/lio_imu_rate_odom, TF=/dummy_tf
+Config: Frames=wrong_frame -> lio_odom
+
+Starting data processing...
+  PointCloud Distance Filter: 1.0 m
+  Waypoint Distance Filter: 4.0 m
+
+--- Processing Finished ---
+No point clouds were saved due to filtering or empty data.
+
+✅ Waypoints saved successfully to .../waypoints/<地図名>.json
+   Total waypoints: 3
+LIO-RAW処理とPCDファイル抽出が完了しました。
+```]
+  ],
+  cause: [
+    `orig_frame` または `target_frame` が、
+    LIO トピックの中身と一致していません。
+
+    lio_raw は、位置情報の座標系名がこの 2 つと一致する場合にだけ点群を保存します。
+    一致しない場合、#tsuyo[警告もエラーも出さずに]すべての点群を捨てます。
+    残るのは
+    `No point clouds were saved due to filtering or empty data.`
+    という 1 行だけです。
+
+    `pointcloud_topic` を間違えた場合も、同じ 1 行だけが出ます。
+  ],
+  fix: [
+    + まず `Config:` の行を読み、指定内容を確認します。
+      `Reading topics:` に点群のトピックが含まれていなければ、
+      原因は `pointcloud_topic` です（@err-topic-pc と同じ直し方）。
+    + フレーム名を、センサ設定ファイルの値に合わせます
+      （@tab-config-frame-map）。
+
+      #terminal[```bash
+grep -e odom_frame -e lidr_frame \
+  ~/colcon_ws/src/hokuyo_navigation2/hokuyo_navigation2/config/rsf_node_config.yaml
+```]
+
+      #console(title: "確認の表示例")[```
+    odom_frame: "lio_odom"     ← target_frame に書く値
+    lidr_frame: "yvt"          ← orig_frame に書く値
+```]
+    + 設定ファイルを次のように直します。
+
+      #terminal[```csv
+orig_frame,yvt,yvt
+target_frame,lio_odom,lio_odom
+```]
+    + 保存して、マッピングをやり直します。
+    + rosbag から直接確かめる方法は @subsubsec-config-checkframe を参照してください。
+  ],
+  verify: [
+    端末に `Total points saved: N points.` が表示され、N が 0 でないこと。
+    #path[map/] に `.pcd` ができていること。
+  ],
+) <err-frame-mismatch>
+
+#errorcard(
+  [`center_utm.txt` が壊れていて run_p2o が異常終了する],
+  id: "E-333",
+  level: "warn",
+  symptom: [
+    p2o マッピングの `run_p2o` の直後に異常終了する。
+  ],
+  shown: [
+    #console(title: "マッピングの端末")[```
+run_p2o
+terminate called after throwing an instance of 'std::invalid_argument'
+  what():  stoi
+Aborted (core dumped)
+```]
+  ],
+  cause: [
+    #path[data/\<地図名\>/center_utm.txt] の中身が数値として読めません。
+    前回の処理が途中で止まったまま残っている場合に起こります。
+  ],
+  fix: [
+    + 中身を確認します。`ゾーン番号,X,Y,Z` の 4 つの数値が必要です。
+
+      #terminal[```bash
+cat ~/colcon_ws/src/hokuyo_navigation2/hokuyo_navigation2/data/<地図名>/center_utm.txt
+```]
+    + 壊れている場合は、作業用フォルダごと削除してやり直します。
+      #tsuyo[このフォルダは処理の途中経過であり、削除しても地図や rosbag は消えません。]
+
+      #terminal[```bash
+rm -rf ~/colcon_ws/src/hokuyo_navigation2/hokuyo_navigation2/data/<地図名>
+```]
+    + 改めてマッピングを実行します。
+  ],
+  verify: [
+    `run_p2o` のあとに `data/<地図名>/output.p2o: ...s` と表示され、処理が続くこと。
+  ],
+) <err-centerutm-broken>
+
+#errorcard(
+  [「Segmentation fault (core dumped)」で run_p2o が異常終了する],
+  id: "E-334",
+  level: "danger",
+  symptom: [
+    p2o マッピングで `run_p2o` と表示された直後に異常終了する。
+  ],
+  shown: [
+    #console(title: "マッピングの端末")[```
+p2o 開始
+p2o_from_rosbag
+error status: 0
+run_p2o
+.../hokuyo_slam.bash: line 311: 274733 Segmentation fault      (core dumped) \
+bash -c ".../run_p2o data/<地図名>/center_utm.txt data/<地図名>/output.p2o"
+```]
+  ],
+  cause: [
+    最適化に渡す中間ファイル
+    #path[data/\<地図名\>/output.p2o] の中身が空、あるいは壊れています。
+    次のいずれかで起こります。
+
+    - `lio_topic` や `gnss_topic` の指定が誤っていて、位置情報が 1 つも取れなかった
+      （@err-topic-lio、@err-topic-gnss）
+    - 走行距離が短すぎて、最適化に使える点が作られなかった
+    - 前回の処理がディスク不足などで途中で止まり、ファイルが途中までしか書かれていない
+      （@err-disk-full）
+
+    #note[
+      GNSS 補正モードには、この中間ファイルが空かどうかを事前に確認する処理がありません。
+      そのため、空のまま最適化に渡されて異常終了します。
+      IMU 補正モード（`slam_mode` が `gravity`）では、
+      代わりに `Error: data/<地図名>/output.p2o is empty.` と表示されて停止します
+      （@err-p2o-empty）。
+    ]
+  ],
+  fix: [
+    + 中間ファイルの大きさを確認します。
+
+      #terminal[```bash
+ls -l ~/colcon_ws/src/hokuyo_navigation2/hokuyo_navigation2/data/<地図名>/output.p2o
+```]
+
+      #tsuyo[サイズが 0、または数百バイト程度なら中身がありません。]
+    + トピック名の指定を確認します。
+      これが最も多い原因です（@subsubsec-config-checktopic）。
+
+      #terminal[```bash
+cd ~/colcon_ws/src/hokuyo_navigation2/hokuyo_navigation2
+ros2 bag info rosbag/<rosbag名>
+```]
+    + 作業用フォルダを削除してから、やり直します。
+      #tsuyo[このフォルダは処理の途中経過であり、削除しても rosbag は消えません。]
+
+      #terminal[```bash
+rm -rf ~/colcon_ws/src/hokuyo_navigation2/hokuyo_navigation2/data/<地図名>
+```]
+    + ディスクの空き容量を確認します。
+
+      #terminal[```bash
+df -h ~
+```]
+    + 走行距離が短い rosbag では地図になりません。
+      数十 m 以上走行したデータを使ってください。
+  ],
+  verify: [
+    端末に `data/<地図名>/output.p2o: 0.4s` のように
+    最適化の所要時間が表示され、処理が続くこと。
+  ],
+) <err-runp2o-segv>
+
+=== 異常終了（コアダンプ）が起きる条件の一覧 <subsubsec-mapping-coredump>
+
+「コアダンプ」は、プログラムが#tsuyo[途中で強制終了]したことを表す表示です。
+マッピングで発生しうる条件を @tab-mapping-coredump にまとめます。
+
+#plain[
+  「コアダンプ」と出ても、パソコンやセンサが壊れたわけではありません。
+  #tsuyo[設定の値かデータに問題がある]というだけです。
+  設定を直して、もう一度マッピングを実行すれば直ります。
+]
+
+#figure(
+  stable(
+    columns: (auto, auto, 1fr, auto),
+    [*端末の表示*], [*止まる場所*], [*原因*], [*参照*],
+    [`Aborted (core dumped)` \ `what(): stoi`],
+    [最適化の開始直後],
+    [`center_utm.txt` の中身が数値でない],
+    [@err-centerutm-broken],
+
+    [`Segmentation fault` \ `(core dumped)`],
+    [最適化],
+    [`output.p2o` が空、または壊れている],
+    [@err-runp2o-segv],
+  ),
+  caption: [マッピングで異常終了が起きる条件],
+) <tab-mapping-coredump>
+
+#warn[
+  #tsuyo[異常終了しても、多くの場合そのまま処理が続き「完了しました」と表示されます。]
+  完了表示を信用せず、地図ファイルができているかを必ず確認してください
+  （@subsubsec-mapping-success）。
+]
+
+#tip[
+  異常終了すると、作業フォルダに `core.12345` のようなファイルが残ることがあります。
+  #tsuyo[これは調査用の記録ファイルで、削除して構いません。]
+  数十 MB〜数 GB になることがあるため、溜まっている場合は削除してください。
+
+  #terminal[```bash
+cd ~/colcon_ws/src/hokuyo_navigation2/hokuyo_navigation2
+ls -lh core.* 2>/dev/null
+rm -f core.*
+```]
+]
+
 === 環境に起因するエラー <subsubsec-err-mapping-env>
 
 #errorcard(
   [ディスクの空き容量が足りない],
-  id: "E-328",
+  id: "E-335",
   level: "warn",
   symptom: [
     `No space left on device` と表示される、
@@ -1534,7 +2679,7 @@ du -sh ~/colcon_ws/src/hokuyo_navigation2/hokuyo_navigation2/data/*
 
 #errorcard(
   [処理の途中で端末が突然閉じる],
-  id: "E-329",
+  id: "E-336",
   level: "warn",
   symptom: [
     エラーを表示せずに端末が消える。
@@ -1563,7 +2708,7 @@ free -h
 
 #errorcard(
   [以前に作った地図が消えてしまった],
-  id: "E-330",
+  id: "E-337",
   level: "danger",
   symptom: [
     マッピングを実行したら、同じ名前の古い地図が無くなっていた。
@@ -1583,6 +2728,120 @@ free -h
   ],
   verify: [—],
 ) <err-map-overwrite>
+
+#errorcard(
+  [「Error: 引数が不足しています \<...\>」],
+  id: "E-338",
+  level: "warn",
+  symptom: [
+    マッピングを実行すると、端末に一瞬この文言が出て終了する。
+  ],
+  shown: [
+    #console(title: "マッピングの端末")[```
+Error: 引数が不足しています <rosbagベース名>
+Error: 引数が不足しています <マップ名>
+Error: 引数が不足しています <MAP_DIR>
+Error: 引数が不足しています <FLAG_FILE_NAME>
+```]
+  ],
+  cause: [
+    GUI からマッピング用スクリプトへ渡す値の一部が空でした。
+    #tsuyo[出力マップ名を入力せずに] #btn[マッピング開始] を押した場合や、
+    スクリプトを端末から手動で実行して引数を省いた場合に起こります。
+  ],
+  fix: [
+    + GUI に戻り、#tsuyo[出力マップ名]の欄が空でないことを確認します。
+    + 名前に空白や日本語を使わないでください。
+      空白があると、そこで引数が区切られてしまいます。
+      半角英数字、`_`、`-` のみを使います。
+    + rosbag を選び直してから、もう一度 #btn[マッピング開始] を押します。
+  ],
+  verify: [
+    端末に `All args are checked.` と表示され、処理が続くこと。
+  ],
+) <err-missing-arg>
+
+#errorcard(
+  [「ERROR: 変換スクリプトが見つかりません: ...」],
+  id: "E-339",
+  level: "danger",
+  symptom: [
+    2D 地図への変換を実行すると、すぐにこの文言が出て終了する。
+  ],
+  shown: [
+    #console(title: "変換の端末")[```
+ERROR: 変換スクリプトが見つかりません: \
+/home/<ユーザ名>/colcon_ws/src/hokuyo_navigation2/hokuyo_navigation2/src/pcd2pgm_converter.py
+```]
+  ],
+  cause: [
+    変換処理の本体である Python スクリプトが、あるべき場所にありません。
+    ソースコードの取得が途中で終わっている場合や、
+    誤って削除した場合に起こります。
+  ],
+  fix: [
+    + ファイルの有無を確認します。
+
+      #terminal[```bash
+ls ~/colcon_ws/src/hokuyo_navigation2/hokuyo_navigation2/src/*.py
+```]
+    + 無い場合は、ソースコードを取得し直します。
+      #tsuyo[作成済みの地図・経路・rosbag は消えません]が、
+      念のため事前に控えを取ってください。
+
+      #terminal[```bash
+cd ~/colcon_ws/src/hokuyo_navigation2
+git checkout -- hokuyo_navigation2/src
+git submodule update --init --recursive
+```]
+    + それでも復旧しない場合は @subsec-trouble-report を参照して問い合わせてください。
+  ],
+  verify: [
+    変換の端末に `--> [1] PCDファイルからPGMマップへのPython変換を開始します。` と表示されること。
+  ],
+) <err-script-missing>
+
+#errorcard(
+  [「ERROR: colcon build がエラーコード ... で失敗しました。」],
+  id: "E-340",
+  level: "warn",
+  symptom: [
+    地図の作成そのものは終わったように見えるが、
+    最後にこの文言が出て、GUI の一覧に地図が現れない。
+  ],
+  shown: [
+    #console(title: "マッピングの端末")[```
+Building package hokuyo_navigation2 to include new map files...
+ERROR: colcon build がエラーコード 1 で失敗しました。マップが正しく読み込めない可能性があります。
+```]
+  ],
+  cause: [
+    地図ファイルを作ったあと、それをシステムへ反映するための再ビルドが失敗しました。
+    #tsuyo[地図ファイル自体は作られています]が、
+    自律走行から参照できない状態です。
+    別の端末で `colcon build` を同時に実行している場合にも起こります。
+  ],
+  fix: [
+    + 地図ファイルができているかを確認します。
+
+      #terminal[```bash
+ls -la ~/colcon_ws/src/hokuyo_navigation2/hokuyo_navigation2/map/
+```]
+    + 他の端末で実行中のビルドがあれば、終わるまで待ちます。
+    + 手動でビルドをやり直します。
+
+      #terminal[```bash
+cd ~/colcon_ws
+colcon build --symlink-install --packages-select hokuyo_navigation2
+```]
+    + ビルドが失敗する場合は、表示されたエラーに応じて
+      @err-build-fail を参照してください。
+  ],
+  verify: [
+    `Summary: 1 package finished` と表示され、
+    GUI の地図一覧に新しい地図が現れること。
+  ],
+) <err-build-after-map>
 
 == 2D 地図変換に関するエラー <subsec-err-pcd2pgm>
 
@@ -2127,7 +3386,483 @@ ros2 node list | grep -i nav
     メイン画面の #btn[ロボット停止] を押してください。
   ],
   verify: [「現在のモード」が「停止モード」に戻ること。],
-)
+) <err-nav-loop>
+
+#errorcard(
+  [「エラー: map_server の起動確認がタイムアウトしました。」],
+  id: "E-510",
+  level: "warn",
+  symptom: [
+    自律走行を開始すると、端末に状態の表示が繰り返し出たあと、
+    30 秒ほどでこの文言が出て、最初からやり直しになる。
+  ],
+  shown: [
+    #console(title: "自律走行の端末")[```
+map_server の起動を待っています...
+現在の状態: unknown
+現在の状態: unknown
+エラー: map_server の起動確認がタイムアウトしました。
+エラー: map_server の起動に失敗しました。再試行します...
+```]
+  ],
+  cause: [
+    2D 地図を配信する `map_server` が起動しませんでした。
+    ほとんどの場合、#tsuyo[指定した地図の `.yaml` か `.pgm` が無い]ことが原因です。
+  ],
+  fix: [
+    + 地図の 3 点セットが揃っているか確認します。
+      #tsuyo[拡張子を除いた名前がすべて同じ]である必要があります。
+
+      #terminal[```bash
+cd ~/colcon_ws/src/hokuyo_navigation2/hokuyo_navigation2/map
+ls -1 <地図名>.*
+```]
+
+      #console(title: "正常な場合の表示")[```
+akashi_kosen.pcd
+akashi_kosen.pgm
+akashi_kosen.yaml
+```]
+    + `.pgm` と `.yaml` が無い場合は、@sec-2d-map の 2D 地図変換を行ってください。
+    + `.yaml` の中の `image:` が、実在する `.pgm` の名前と一致しているか確認します。
+
+      #terminal[```bash
+cat <地図名>.yaml
+```]
+    + 名前を変更した場合は、@err-map-name の手順ですべて揃え直してください。
+  ],
+  verify: [
+    端末に `map_server はすでに Active です。` と表示されること。
+  ],
+) <err-mapserver-timeout>
+
+#errorcard(
+  [「エラー: Nav2の起動確認がタイムアウトしました。現在の状態: ...」],
+  id: "E-511",
+  level: "danger",
+  symptom: [
+    地図の読み込みまでは進むが、その後 60 秒ほど待たされてこの文言が出る。
+    そのまま自動で最初からやり直し、#tsuyo[何度も同じことを繰り返す]。
+  ],
+  shown: [
+    #console(title: "自律走行の端末")[```
+Nav2のライフサイクル状態とアクションサーバーの準備を監視しています...
+Debug: bt_navigator state is 'unconfigured', action server ready: 0...
+エラー: Nav2の起動確認がタイムアウトしました。現在の状態: unconfigured
+エラー: Nav2の起動に失敗しました。再試行します...
+```]
+  ],
+  cause: [
+    経路計画を行う Nav2 の一部が起動に失敗しています。
+    Nav2 は複数のプログラムが連携して動くため、
+    #tsuyo[どれか 1 つでも落ちると全体が「準備完了」になりません]。
+    #tsuyo[設定ファイルの記述ミス]が最も多い原因です。
+  ],
+  fix: [
+    + #tsuyo[まず、どのプログラムが落ちているかを特定します。]
+      自律走行の端末をさかのぼり、
+      `process has died` または `terminate called` を含む行を探してください。
+
+      #console(title: "落ちているプログラムを示す行の例")[```
+[ERROR] [controller_server-5]: process has died [pid 177247, exit code -6, ...]
+```]
+    + 見つかったプログラム名に応じて対処します。
+
+      #figure(
+        stable(
+          columns: (auto, 1fr),
+          [*落ちたプログラム*], [*参照先*],
+          [`map_server`], [@err-mapserver-timeout],
+          [`controller_server` / \ `planner_server` など],
+          [Nav2 の設定ファイル #path[config/nav2/] の記述ミスが原因です。
+           下の「設定値の誤りを見つける」を参照してください],
+          [上記以外], [@subsec-trouble-report（端末の内容を添えて問い合わせ）],
+        ),
+        caption: [落ちたプログラムごとの参照先],
+      ) <tab-nav2-died>
+    + #tsuyo[設定値の誤りを見つける。]
+      `terminate called` の直後の行に、問題のある項目名が示されます。
+
+      #console(title: "設定値の誤りを示す行の例")[```
+terminate called after throwing an instance of 'rclcpp::exceptions::InvalidParameterTypeException'
+  what():  parameter 'height' has invalid type: Wrong parameter type, \
+parameter {height} is of type {integer}, setting it to {double} is not allowed.
+```]
+
+      この例では、#path[config/nav2/nav2_params.yaml] の `height` が
+      #tsuyo[整数で書くべきところを小数（`6.0`）で書いている]ことを表しています。
+      該当箇所を `6` のように直してください。
+      #tsuyo[Nav2 の設定ファイルは、値の書き方（整数か小数か）が違うだけでも起動しません。]
+    + 繰り返しを止めるには、GUI の #btn[ロボット停止] を押します。
+      GUI が反応しない場合は @subsec-nav-stop の手順で停止してください。
+  ],
+  verify: [
+    端末に `Nav2システムおよびアクションサーバーの準備が完全に完了しました。` と表示されること。
+  ],
+) <err-nav2-timeout>
+
+#errorcard(
+  [「エラー: オプションファイルが見つかりません: ...」],
+  id: "E-512",
+  level: "danger",
+  symptom: [
+    自律走行を開始すると、ほぼ何も表示されないまま端末が終了する。
+  ],
+  shown: [
+    #console(title: "自律走行の端末")[```
+エラー: オプションファイルが見つかりません: \
+/home/<ユーザ名>/colcon_ws/src/hokuyo_navigation2/hokuyo_navigation2/config/wizurg_opts/nav_opt_lio.csv
+```]
+  ],
+  cause: [
+    走行時の起動オプションをまとめた設定ファイルがありません。
+    #path[config/wizurg_opts/] のファイルを削除・改名した場合に起こります。
+  ],
+  fix: [
+    + フォルダの中身を確認します。
+      `nav_opt_lio.csv`、`plural_opt_lio.csv`、`sensor_rosbag_lio.csv` の
+      3 つが必要です。
+
+      #terminal[```bash
+ls ~/colcon_ws/src/hokuyo_navigation2/hokuyo_navigation2/config/wizurg_opts/
+```]
+    + 不足している場合は、ソースから復元します。
+
+      #terminal[```bash
+cd ~/colcon_ws/src/hokuyo_navigation2
+git checkout -- hokuyo_navigation2/config/wizurg_opts
+```]
+    + 各ファイルの意味は @tab-ref-wizurg-opts を参照してください。
+  ],
+  verify: [
+    端末に `--- 実行パラメータ ---` が表示されること。
+  ],
+) <err-opt-missing>
+
+#errorcard(
+  [「エラー: マップリストファイルが見つかりません: ...」],
+  id: "E-513",
+  level: "warn",
+  symptom: [
+    マルチマップ走行を開始すると、すぐに端末が終了する。
+  ],
+  shown: [
+    #console(title: "自律走行の端末")[```
+エラー: マップリストファイルが見つかりません: \
+/home/<ユーザ名>/colcon_ws/src/hokuyo_navigation2/hokuyo_navigation2/config/maps_and_waypoints.csv
+```]
+  ],
+  cause: [
+    走行順序を書いたシナリオファイル（CSV）が見つかりません。
+    GUI で選んだあとに削除・改名した場合に起こります。
+  ],
+  fix: [
+    + #path[config/] にシナリオファイルがあるか確認します。
+
+      #terminal[```bash
+ls ~/colcon_ws/src/hokuyo_navigation2/hokuyo_navigation2/config/*.csv
+```]
+    + 無い場合は、#btn[ファイル管理] → #btn[設定ファイル管理] から新規作成します。
+      #tsuyo[1 行目は次のとおりでなければなりません]（@err-nav-no-csv）。
+
+      #terminal[```csv
+map_file,waypoint_file,nav_type,interval
+```]
+    + 作成後に自律走行の画面を開き直し、一覧から選び直してください。
+  ],
+  verify: [
+    シナリオファイルが `CSVファイル` の一覧に表示され、走行が始まること。
+  ],
+) <err-scenario-missing>
+
+#errorcard(
+  [「警告: 不明なナビゲーションタイプです: '...'」],
+  id: "E-514",
+  level: "warn",
+  symptom: [
+    走行は始まるが、意図した自己位置推定の方式で動いていないように見える。
+  ],
+  shown: [
+    #console(title: "自律走行の端末")[```
+警告: 不明なナビゲーションタイプです: 'LOC'。デフォルト設定を使用します。
+警告: 不明なナビゲーションタイプです: 'gnss '。デフォルト(loc)を使用します。
+```]
+  ],
+  cause: [
+    シナリオファイルの `nav_type` 列が `loc` または `gnss` になっていません。
+    #tsuyo[大文字（`LOC`）や、前後の空白（`gnss␣`）でも一致しません。]
+  ],
+  fix: [
+    + #btn[ファイル管理] → #btn[設定ファイル管理] からシナリオファイルの
+      #btn[編集] を押し、表形式の画面で `Nav Type` を選び直します。
+      #tsuyo[表形式の画面を使えば、この誤りは起こりません。]
+    + テキスト編集を使う場合は、`loc` か `gnss` を#tsuyo[小文字で、空白を入れずに]
+      書いてください。
+    + カンマの前後に空白を入れないでください。
+  ],
+  verify: [
+    端末に `ナビゲーションタイプ: LIO (Localization)` または
+    `ナビゲーションタイプ: GNSS` と表示されること。
+  ],
+) <err-navtype>
+
+#errorcard(
+  [「Timeout waiting for TF from map to base\_link after ... seconds. Shutting down.」],
+  id: "E-515",
+  level: "warn",
+  symptom: [
+    Nav2 の準備完了までは進むのに、経路の追従が始まらず、
+    #tsuyo[待機時間（既定 50 秒）]が過ぎたところで終了する。
+    そのあと 15 秒待って自動的にやり直される。
+  ],
+  shown: [
+    #console(title: "自律走行の端末")[```
+[INFO] [nav2_waypoint_manager_executor]: Waiting for transform from map to base_link...
+[ERROR] [nav2_waypoint_manager_executor]: Timeout waiting for TF from map to base_link \
+after 50.0 seconds. Shutting down.
+エラー: waypoint_managerが異常終了しました。15秒後に再試行します...
+```]
+  ],
+  cause: [
+    地図上での自分の位置が求まっていません。
+    `loc` モードでは `simple_fastlio_localization` が
+    #tsuyo[現在の点群と 3D 点群地図を照合]して位置を出しますが、
+    これが成立していない状態です。
+  ],
+  fix: [
+    + ロボットが#tsuyo[地図を作ったときの出発地点付近]にいるか確認します。
+      大きく離れていると照合できません。
+    + センサのデータが流れているか確認します。
+      数値が表示され続ければ正常です。
+
+      #terminal[```bash
+ros2 topic hz /hokuyo3d/hokuyo_cloud2
+ros2 topic hz /rsf/lio_imu_rate_odom
+```]
+    + 座標系のつながりを図で確認します。
+      `map` が切り離されていれば自己位置推定が動いていません（@err-tf-broken）。
+
+      #terminal[```bash
+ros2 run rqt_tf_tree rqt_tf_tree
+```]
+    + 3D 点群地図（`.pcd`）が読み込めているか確認します。
+      端末に `parameter map_file not specified` が出ている場合は
+      @err-locmap-param を参照してください。
+    + それでも直らない場合は、いったん停止し、
+      #tsuyo[ロボットを出発地点へ戻してから]開始し直してください。
+  ],
+  verify: [
+    端末に `TF from map to base_link is available. Nav2 should be ready.` と表示されること。
+  ],
+) <err-tf-timeout>
+
+#errorcard(
+  [「parameter map\_file not specified」],
+  id: "E-516",
+  level: "warn",
+  symptom: [
+    `loc` モードで走行を開始すると、自己位置推定のプログラムがすぐに終了する。
+  ],
+  shown: [
+    #console(title: "自律走行の端末")[```
+[ERROR] [localization_node]: parameter map_file not specified
+```]
+  ],
+  cause: [
+    自己位置推定に使う 3D 点群地図（`.pcd`）の場所が渡っていません。
+    選んだ地図名に対応する `.pcd` が #path[map/] に無い場合に起こります。
+  ],
+  fix: [
+    + 選んだ地図名の `.pcd` があるか確認します。
+
+      #terminal[```bash
+ls ~/colcon_ws/src/hokuyo_navigation2/hokuyo_navigation2/map/<地図名>.pcd
+```]
+    + 無い場合は、@sec-mapping のマッピングをやり直して 3D 点群地図を作成します。
+    + `.pgm` だけがあって `.pcd` が無い場合、
+      #tsuyo[`gnss` モードでは走れますが `loc` モードでは走れません]。
+      走行モードの選び方は @subsec-nav-mode を参照してください。
+  ],
+  verify: [
+    RViz2 に 3D 点群地図（白い点の集まり）が表示されること。
+  ],
+) <err-locmap-param>
+
+#errorcard(
+  [「Nav2 action server not available after waiting!」「Goal was rejected by action server」],
+  id: "E-517",
+  level: "warn",
+  symptom: [
+    経路の追従を始めようとした瞬間に終了し、やり直しが繰り返される。
+  ],
+  shown: [
+    #console(title: "自律走行の端末")[```
+[INFO] [nav2_waypoint_manager_executor]: Waiting for Nav2 action server...
+[ERROR] [nav2_waypoint_manager_executor]: Nav2 action server not available after waiting!
+[ERROR] [nav2_waypoint_manager_executor]: Goal was rejected by action server
+```]
+  ],
+  cause: [
+    Nav2 が「準備完了」と判定された直後に落ちたか、
+    目標地点が#tsuyo[地図の外]あるいは#tsuyo[障害物の中]を指しています。
+  ],
+  fix: [
+    + 端末をさかのぼり、`process has died` が無いか確認します。
+      あれば @err-nav2-timeout の手順で対処します。
+    + 経路が 2D 地図の範囲内に収まっているか、
+      Map Viewer で 2D 地図と経路を重ねて確認します（@sec-waypoint）。
+    + 経路が壁の中や、真っ黒に潰れた領域を通っていないか確認します。
+      通っている場合は 2D 地図の作り直し（@subsec-2dmap-tips）か、
+      経路の引き直しが必要です。
+    + 1 点目の目標がロボットの現在地から遠すぎないか確認します。
+  ],
+  verify: [
+    端末に `Goal accepted. Starting custom arrival check...` と表示されること。
+  ],
+) <err-goal-rejected>
+
+#errorcard(
+  [「Timeout: Odometry switch type did not become stable within ... seconds.」],
+  id: "E-518",
+  level: "warn",
+  symptom: [
+    `gnss` モードで開始したときだけ、
+    `gnss-lio-switch initializing...` の表示が続いたあとに終了する。
+  ],
+  shown: [
+    #console(title: "自律走行の端末")[```
+[INFO] [nav2_waypoint_manager_executor]: gnss-lio-switch initializing... Timeout in 12.3 seconds.
+[ERROR] [nav2_waypoint_manager_executor]: Timeout: Odometry switch type did not become stable \
+within 30 seconds. Shutting down.
+```]
+  ],
+  cause: [
+    RSF が「いま GNSS と LIO のどちらを使っているか」を知らせる
+    `/rsf/rsf_odom_type` が届いていないか、値が安定していません。
+    センサとの通信ができていない場合や、
+    GNSS の受信状況が悪く切り替えが頻繁に起きている場合に発生します。
+  ],
+  fix: [
+    + トピックが流れているか確認します。
+
+      #terminal[```bash
+ros2 topic echo /rsf/rsf_odom_type --once
+```]
+    + 何も表示されない場合は、センサとの通信が切れています（@err-no-sensor）。
+    + 表示されるが値が頻繁に変わる場合は、GNSS の受信環境が悪い状態です。
+      空が広く見える場所へ移動してから開始してください（@err-no-gnss）。
+    + 屋内など GNSS が使えない場所では、
+      #tsuyo[`loc` モードに切り替えて]走行してください（@subsec-nav-mode）。
+  ],
+  verify: [
+    端末に `gnss-lio-switch is stable now.` と表示されること。
+  ],
+) <err-switch-timeout>
+
+#errorcard(
+  [「Failed to decode JSON in ...」「Invalid JSON format in ...」],
+  id: "E-519",
+  level: "warn",
+  symptom: [
+    走行を開始した直後に、経路の読み込みで失敗して終了する。
+  ],
+  shown: [
+    #console(title: "自律走行の端末")[```
+[ERROR] [nav2_waypoint_manager_executor]: Failed to decode JSON in myroute.json. \
+Please check the file format.
+[ERROR] [nav2_waypoint_manager_executor]: Invalid JSON format in myroute.json. \
+Expected [[x, y, 0.0], [0.0, 0.0, z, w], {'type': '...', 'value': ...}].
+```]
+  ],
+  cause: [
+    経路ファイルが壊れています。
+    テキスト編集で直接書き換えた場合や、
+    保存の途中で GUI サーバが止まった場合に起こります。
+  ],
+  fix: [
+    + 形式が壊れていないか確認します。
+      何も表示されなければ正常です。
+
+      #terminal[```bash
+cd ~/colcon_ws/src/hokuyo_navigation2/hokuyo_navigation2/waypoints
+python3 -m json.tool <経路名>.json > /dev/null
+```]
+    + 壊れている場合は、Map Viewer で経路を開き直し、
+      #btn[ウェイポイントを保存] で保存し直してください（@sec-waypoint）。
+    + 開くこともできない場合は、マッピングをやり直して経路を作り直します。
+    + #tsuyo[経路ファイルはテキスト編集で直接書き換えないでください。]
+      必ず Map Viewer から編集してください。
+  ],
+  verify: [
+    端末に `Loaded N waypoints from <経路名>.json` と表示されること。
+  ],
+) <err-wp-json>
+
+#errorcard(
+  [「Waypoint timeout (...s) exceeded. Skipping waypoint ...」],
+  id: "E-520",
+  level: "info",
+  symptom: [
+    ある地点にたどり着けないまま、次の地点へ進んでしまう。
+  ],
+  shown: [
+    #console(title: "自律走行の端末")[```
+[WARN] [nav2_waypoint_manager_executor]: Waypoint timeout (60.0s) exceeded. \
+Skipping waypoint 7.
+```]
+  ],
+  cause: [
+    決められた時間内にその地点へ到達できなかったため、
+    #tsuyo[意図的に飛ばして先へ進んでいます]。
+    障害物で進めない、経路が通れない場所を通っている、
+    あるいは自己位置がずれているときに起こります。
+  ],
+  fix: [
+    + まず#tsuyo[現場を目視]し、その地点の前に障害物が無いか確認します。
+    + 障害物が無いのに止まる場合は、
+      2D 地図でその地点が黒く潰れていないか確認します（@err-pgm-dark）。
+    + 自己位置がずれている場合は @err-tf-timeout を参照してください。
+    + 飛ばされた地点が重要な場合は、
+      経路を引き直すか、その手前に地点を追加して緩やかに進入させてください
+      （@subsec-waypoint-tips）。
+  ],
+  verify: [
+    すべての地点で `Reached waypoint N.` と表示されること。
+  ],
+) <err-wp-timeout>
+
+#errorcard(
+  [「Could not transform "base\_link" to "map": ... Shutting down node for retry.」],
+  id: "E-521",
+  level: "warn",
+  symptom: [
+    走行の途中で急に停止し、やり直しが始まる。
+  ],
+  shown: [
+    #console(title: "自律走行の端末")[```
+[ERROR] [nav2_waypoint_manager_executor]: Could not transform "base_link" to "map": \
+Lookup would require extrapolation into the future. Shutting down node for retry.
+```]
+  ],
+  cause: [
+    走行中に自己位置推定が一時的に途切れました。
+    特徴の少ない場所（広い駐車場、長い廊下、白い壁の前）を走ったときや、
+    パソコンの処理が追いつかず更新が遅れたときに起こります。
+  ],
+  fix: [
+    + `Lidar Odom Rate` の表示を確認します。
+      赤や `N/A` になっていれば処理が追いついていません（@err-lio-slow）。
+    + 走行速度を下げてください。
+      経路の該当区間に `slow` 属性を設定すると自動で減速します（@subsec-nav-attr）。
+    + 特徴の少ない区間が長い場合は、
+      `gnss` モードでの走行（@subsec-nav-mode）を検討してください。
+    + パソコンの負荷を下げます。
+      不要なアプリケーション、特にブラウザの余分なタブを閉じてください。
+  ],
+  verify: [
+    走行が最後まで中断せずに進むこと。
+  ],
+) <err-tf-lost>
 
 == ビルド・セットアップに関するエラー <subsec-err-build>
 
@@ -2276,16 +4011,291 @@ pip3 install -r requirements.txt
     + ROS 2 の環境を読み込んでから起動し直します。
 
       #terminal[```bash
-source /opt/ros/humble/setup.bash
+source /opt/ros/$ROS_DISTRO/setup.bash
 source ~/colcon_ws/install/setup.bash
 ```]
+    + #dist-jazzy では `pip3 install` に
+      `--user --break-system-packages` が必要です（@err-pep668）。
     + 表示されたモジュール名が上記に無い場合は、
       そのモジュール名を `pip3 install` に指定して導入してください。
   ],
   verify: [
     `Flask Server starting at http://0.0.0.0:5050` と表示されること。
   ],
-)
+) <err-server-py>
+
+#errorcard(
+  [「ros2: command not found」],
+  id: "E-605",
+  level: "warn",
+  symptom: [
+    端末で `ros2` から始まるコマンドを実行すると、見つからないと言われる。
+  ],
+  shown: [
+    #console(title: "端末")[```
+ros2: command not found
+```]
+  ],
+  cause: [
+    ROS 2 の環境が読み込まれていません。
+    `source` は#tsuyo[端末ごと]に必要で、新しい端末を開くたびに実行されます。
+    通常は `~/.bashrc` に書いておくことで自動化します。
+  ],
+  fix: [
+    + その場で読み込みます。`humble` の部分は構成に合わせてください。
+
+      #humble[
+        #terminal[```bash
+source /opt/ros/humble/setup.bash
+source ~/colcon_ws/install/setup.bash
+```]
+      ]
+      #jazzy[
+        #terminal[```bash
+source /opt/ros/jazzy/setup.bash
+source ~/colcon_ws/install/setup.bash
+```]
+      ]
+    + 毎回自動で読み込まれるようにします。
+
+      #terminal[```bash
+echo "source /opt/ros/$ROS_DISTRO/setup.bash" >> ~/.bashrc
+echo "source $HOME/colcon_ws/install/setup.bash" >> ~/.bashrc
+source ~/.bashrc
+```]
+    + そもそも ROS 2 が入っていない可能性もあります。次で確認します。
+      何も表示されなければ未導入です（@subsec-setup-ros2）。
+
+      #terminal[```bash
+ls /opt/ros/
+```]
+  ],
+  verify: [
+    `ros2 --help` が使い方を表示すること。
+  ],
+) <err-ros-notfound>
+
+#errorcard(
+  [「error: externally-managed-environment」],
+  id: "E-606",
+  level: "warn",
+  symptom: [
+    `pip3 install` を実行すると、この英文が出て何も導入されない。
+  ],
+  shown: [
+    #console(title: "端末")[```
+error: externally-managed-environment
+
+× This environment is externally managed
+╰─> To install Python packages system-wide, try apt install ...
+```]
+  ],
+  cause: [
+    #dist-jazzy Ubuntu 24.04（Python 3.12）では、
+    システムの Python を壊さないように
+    #tsuyo[そのままの `pip3 install` が禁止されています]（PEP 668）。
+  ],
+  fix: [
+    + `--user --break-system-packages` を付けて、
+      ユーザ自身の領域（#path[~/.local]）へ導入します。
+
+      #terminal[```bash
+cd ~/colcon_ws/src/hokuyo_navigation2
+pip3 install --user --break-system-packages -r requirements.txt
+```]
+    + 導入先へ PATH を通します。
+
+      #terminal[```bash
+echo 'export PATH=$HOME/.local/bin:$PATH' >> ~/.bashrc
+source ~/.bashrc
+```]
+  ],
+  verify: [
+    #terminal[```bash
+python3 -c "import open3d, scipy, numpy, pyproj, transforms3d; print('OK')"
+```]
+    `OK` と表示されること。
+  ],
+) <err-pep668>
+
+#errorcard(
+  [シリアルポートを開けない（Permission denied）],
+  id: "E-607",
+  level: "warn",
+  symptom: [
+    モータドライバを起動すると、`/dev/ttyUSB0` を開けないと表示されて終了する。
+  ],
+  shown: [
+    #console(title: "モータドライバの端末")[```
+could not open /dev/ttyUSB0: Permission denied
+```]
+  ],
+  cause: [
+    シリアルポートを使う権限がユーザに与えられていません。
+    Ubuntu では `dialout` というグループに所属している必要があります。
+  ],
+  fix: [
+    + 自分をグループに追加します。
+
+      #terminal[```bash
+sudo usermod -aG dialout $USER
+```]
+    + #tsuyo[いったんログアウトして、ログインし直してください。]
+      再ログインしないと反映されません。
+    + 反映されたか確認します。`dialout` が含まれていれば成功です。
+
+      #terminal[```bash
+groups
+```]
+    + ケーブルの挿し直しでポート名が変わることがあります。
+      実際の名前を確認してください。
+
+      #terminal[```bash
+ls /dev/ttyUSB* /dev/ttyACM*
+```]
+  ],
+  verify: [
+    モータドライバの端末がエラーなく開いたままになること。
+  ],
+) <err-serial-perm>
+
+#errorcard(
+  [Humble と Jazzy が混ざってしまった],
+  id: "E-608",
+  level: "danger",
+  symptom: [
+    ビルドは通るのに実行時に落ちる、
+    ライブラリのバージョンが違うという英文が出る、
+    ノードが起動直後に終了する、といった症状が同時に起こる。
+  ],
+  shown: [
+    #console(title: "端末")[```
+symbol lookup error: ... undefined symbol: ...
+error while loading shared libraries: lib....so: cannot open shared object file
+```]
+  ],
+  cause: [
+    1 台のパソコンに 2 つの ROS 2 が入っており、
+    #tsuyo[`~/.bashrc` で両方が読み込まれています]。
+    先に読み込んだほうと後から読み込んだほうのライブラリが混ざります。
+  ],
+  fix: [
+    + いま何が読み込まれているか確認します。
+
+      #terminal[```bash
+grep "setup.bash" ~/.bashrc
+```]
+
+      #console(title: "混在している例（誤り）")[```
+source /opt/ros/humble/setup.bash
+source /opt/ros/jazzy/setup.bash
+source /home/hokuyo/colcon_ws/install/setup.bash
+```]
+    + 使わないほうの行を削除します。
+
+      #terminal[```bash
+nano ~/.bashrc
+```]
+
+      #tsuyo[残すのは 1 つの ROS 2 だけ]です。
+      ワークスペースの `install/setup.bash` は最後に置きます。
+    + ワークスペースを作り直します。
+      #tsuyo[この操作でビルド結果は消えますが、
+      地図・経路・rosbag は消えません。]
+
+      #terminal[```bash
+cd ~/colcon_ws
+rm -rf build install log
+source ~/.bashrc
+colcon build
+```]
+    + `hokuyo_slam_ros2` も作り直します（@subsec-setup-slam）。
+  ],
+  verify: [
+    #terminal[```bash
+echo $ROS_DISTRO
+```]
+    意図した 1 つだけが表示され、`ros2 pkg list` が正常に動くこと。
+  ],
+) <err-distro-mix>
+
+#errorcard(
+  [GUI のボタンを押しても何も起きない（補助ツールの不足）],
+  id: "E-609",
+  level: "warn",
+  symptom: [
+    #btn[データ取得] や #btn[マッピング] を押すと画面は切り替わるのに、
+    端末が 1 つも開かず、処理も始まらない。
+  ],
+  shown: [
+    #console(title: "GUI サーバの端末")[```
+Subprocess failed: Command not found or script path error: [...]
+/bin/bash: line 1: gnome-terminal: command not found
+xdotool: command not found
+```]
+  ],
+  cause: [
+    処理は#tsuyo[新しい端末ウィンドウを開いて]実行されます。
+    その端末を開く `gnome-terminal` や、
+    ウィンドウを最小化する `xdotool` / `wmctrl` が入っていません。
+    最小構成の Ubuntu やサーバ版でよく起こります。
+  ],
+  fix: [
+    + 不足しているツールを導入します。
+
+      #terminal[```bash
+sudo apt-get install -y gnome-terminal xdotool wmctrl zenity bc tree
+```]
+    + GUI サーバを再起動します。
+
+      #terminal[```bash
+cd ~/colcon_ws/src/hokuyo_navigation2/hokuyo_navigation2/scripts
+./stop_server.sh && sleep 3 && ./start_server.sh
+```]
+    + リモート接続（SSH）でサーバだけを動かしている場合、
+      #tsuyo[画面がないため端末を開けません]。
+      ロボット側のパソコンの画面で `start_server.sh` を実行してください。
+  ],
+  verify: [
+    ボタンを押すと新しい端末ウィンドウが開くこと。
+  ],
+) <err-noterm>
+
+#errorcard(
+  [「Permission denied」でスクリプトが実行できない],
+  id: "E-610",
+  level: "warn",
+  symptom: [
+    `./start_server.sh` などを実行すると、許可がないと表示される。
+    GUI のボタンを押しても処理が始まらない。
+  ],
+  shown: [
+    #console(title: "端末")[```
+bash: ./start_server.sh: Permission denied
+```]
+  ],
+  cause: [
+    スクリプトに実行権限が付いていません。
+    ソースコードを ZIP で受け取った場合や、
+    Windows 側のフォルダにコピーした場合に起こります。
+  ],
+  fix: [
+    + まとめて実行権限を付けます。
+
+      #terminal[```bash
+cd ~/colcon_ws/src/hokuyo_navigation2/hokuyo_navigation2
+chmod +x scripts/*.sh scripts/*/*.sh scripts/mapping/*.bash src/*.py
+```]
+    + 付いたか確認します。先頭が `-rwx` で始まっていれば成功です。
+
+      #terminal[```bash
+ls -l scripts/start_server.sh
+```]
+  ],
+  verify: [
+    `./start_server.sh` が実行できること。
+  ],
+) <err-noexec>
 
 == 端末メッセージ逆引き表 <subsec-msg-index>
 
@@ -2298,6 +4308,24 @@ source ~/colcon_ws/install/setup.bash
   複数のメッセージが出ている場合は、#tsuyo[いちばん上（最初）に出たもの]が
   本当の原因であることがほとんどです。
 ]
+
+=== サーバ・Vizanti の起動時
+
+#figure(
+  stable(
+    columns: (1fr, auto),
+    [*端末の表示*], [*参照*],
+    [`ImportError: cannot import name 'get_parameter_value' from 'ros2param.api'`],
+    [@err-vizanti-rosapi],
+    [`[ERROR] [rosapi_node-2]: process has died ...`], [@err-vizanti-rosapi],
+    [`Proxy: Error: Could not connect to ROSBridge at ws://localhost:9090.`],
+    [@err-vizanti],
+    [`WebSocketClosedError: Tried to write to a closed websocket`],
+    [対処不要（正常な警告）],
+    [`Recording started.` と出るが rosbag ができない], [@err-bag-notopic],
+  ),
+  caption: [サーバ・Vizanti 起動時のメッセージ],
+) <tab-msg-server>
 
 === 準備の段階
 
@@ -2476,9 +4504,93 @@ source ~/colcon_ws/install/setup.bash
     [`ERROR: colcon build がエラーコード ... で失敗しました。`], [@err-build-fail],
     [ブラウザが「処理中」のまま終わらない], [@err-mapping-stuck],
     [以前の地図が消えた], [@err-map-overwrite],
+    [`Error: 引数が不足しています <...>`], [@err-missing-arg],
+    [`ERROR: 変換スクリプトが見つかりません: ...`], [@err-script-missing],
+    [`Segmentation fault (core dumped)`], [@err-runp2o-segv],
+    [`terminate called ... std::invalid_argument` / `what(): stoi`], [@err-centerutm-broken],
+    [`Topic '...' not found in bag file.`], [@err-topic-pc],
+    [`Error (ROS 2): Topic '...' not found in '...'`], [@err-topic-gnss],
+    [`cat: gnss_log/...csv: No such file or directory`], [@err-topic-gnss],
+    [`can't open file: data/<地図名>/center_utm.txt`], [@err-topic-lio],
+    [`FileNotFoundError: ... lio_edge_timestamps.txt`], [@err-topic-lio],
+    [`エラー：p2o ファイルの行数が不足しています。`], [@err-topic-lio],
+    [`エラー：入力ファイルの形式が不正です。原点の行が見つかりません。`], [@err-topic-pc],
+    [`No point clouds were saved due to filtering or empty data.`], [@err-frame-mismatch],
+    [`[pcl::PCDWriter::writeASCII] Input point cloud has no data!`], [@err-lioraw-silent],
+    [`エラー: ... に数値として読めない値が指定されました: '...'`], [@err-savedist-nan],
+    [`エラー: ... には 0 以上の数値を指定してください: '...'`], [@err-savedist-nan],
+    [`エラー: 結合された点群が空です。地図は作成できません。`], [@err-concat-broken],
+    [`結合した点群: 0 枚 / N 枚中`], [@err-concat-broken],
+    [`ros2: command not found`], [@err-ros-notfound],
+    [`bash: ./xxx.sh: Permission denied`], [@err-noexec],
+    [`gnome-terminal: command not found`], [@err-noterm],
+    [`error: externally-managed-environment`], [@err-pep668],
   ),
   caption: [全モード共通のメッセージ],
 ) <tab-msg-common>
+
+=== 自律走行の段階
+
+#figure(
+  stable(
+    columns: (1fr, auto),
+    [*端末の表示・症状*], [*参照*],
+    [`エラー: オプションファイルが見つかりません: ...`], [@err-opt-missing],
+    [`エラー: マップリストファイルが見つかりません: ...`], [@err-scenario-missing],
+    [`警告: 不明なナビゲーションタイプです: '...'`], [@err-navtype],
+    [`警告: ... init_pose.txt が見つかりません。`], [@err-init-pose],
+    [`エラー: map_server の起動確認がタイムアウトしました。`], [@err-mapserver-timeout],
+    [`エラー: map_server の起動に失敗しました。再試行します...`], [@err-mapserver-timeout],
+    [`エラー: Nav2の起動確認がタイムアウトしました。現在の状態: ...`], [@err-nav2-timeout],
+    [`エラー: Nav2の起動に失敗しました。再試行します...`], [@err-nav2-timeout],
+    [`InvalidParameterTypeException` / `parameter '...' has invalid type`], [@err-nav2-timeout],
+    [`process has died [pid ..., exit code -6, ...]`], [@err-nav2-timeout],
+    [`parameter map_file not specified`], [@err-locmap-param],
+    [`Timeout waiting for TF from map to base_link ...`], [@err-tf-timeout],
+    [`Timeout: Odometry switch type did not become stable ...`], [@err-switch-timeout],
+    [`Nav2 action server not available after waiting!`], [@err-goal-rejected],
+    [`Goal was rejected by action server`], [@err-goal-rejected],
+    [`Failed to decode JSON in ...`], [@err-wp-json],
+    [`Invalid JSON format in ...`], [@err-wp-json],
+    [`Waypoint timeout (...s) exceeded. Skipping waypoint ...`], [@err-wp-timeout],
+    [`Could not transform "base_link" to "map": ...`], [@err-tf-lost],
+    [`エラー: waypoint_managerが異常終了しました。15秒後に再試行します...`], [@err-wp-manager],
+    [`=== CSVファイルの最後まで処理しました。ループを再開します。 ===`], [@err-nav-loop],
+  ),
+  caption: [自律走行で表示されるメッセージ],
+) <tab-msg-nav>
+
+=== GUI（ブラウザ）の帯
+
+#figure(
+  stable(
+    columns: (1fr, auto),
+    [*ブラウザ上部の表示*], [*参照*],
+    [`セキュリティ上の理由により、このディレクトリにはアクセスできません。`], [@err-path-denied],
+    [`ディレクトリが見つかりません: ...`], [@err-dir-notfound],
+    [`ファイルまたはディレクトリが選択されていません。`], [@err-noselect],
+    [`削除するアイテムが選択されていません。`], [@err-noselect],
+    [`PCDファイルが選択されていません。`], [@err-noselect],
+    [`ファイル "..." は既に存在します。`], [@err-file-exists],
+    [`拡張子の変更はできません。ファイル名のみ変更してください。`], [@err-ext-change],
+    [`不正なファイルパスです。`], [@err-path-invalid],
+    [`許可されていないパスへのアクセスが試行されました。`], [@err-path-invalid],
+    [`無効なディレクトリタイプです。`], [@err-dirtype],
+    [`警告: YAMLファイル "..." の読み込みに失敗しました。`], [@err-yaml-load],
+    [`警告: Waypointファイル "..." の読み込みに失敗しました。`], [@err-wp-load],
+    [`ダウンロード用のファイルが見つかりません。`], [@err-download],
+    [`ファイルのZIP化中にエラーが発生しました: ...`], [@err-download],
+    [`ROS Bagフィルタのコア機能がインポートされていません。`], [@err-bagfilter-import],
+    [`選択されたファイル形式はROS Bagとしてサポートされていません。`], [@err-bag-format],
+    [`トピックフィルタリングにはトピックを一つ以上選択してください。`], [@err-bag-input],
+    [`出力ファイル名を入力してください。` / `出力マップ名を入力してください。`], [@err-bag-input],
+    [`入力ファイルが見つかりません。パスを確認してください。`], [@err-bag-inputmissing],
+    [`リクエストJSONのパースエラー: ...`], [@err-json-parse],
+    [`処理中にエラーが発生しました: ...`], [@err-json-parse],
+    [`Internal Server Error`（白い画面）], [@err-pcd2pgm-500],
+  ),
+  caption: [ブラウザに表示されるメッセージ],
+) <tab-msg-gui>
 
 == 問い合わせるときに用意するもの <subsec-trouble-report>
 
